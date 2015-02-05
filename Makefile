@@ -12,18 +12,19 @@ BUILD_BASE	= build
 FW_BASE		= firmware
 
 # Base directory for the compiler
-XTENSA_TOOLS_ROOT ?= /opt/Espressif/crosstool-NG/builds/xtensa-lx106-elf/bin
+XTENSA_TOOLS_ROOT ?= /opt/Espressif/esp-open-sdk/xtensa-lx106-elf/bin
 
 #Extra Tensilica includes from the ESS VM
-SDK_EXTRA_INCLUDES ?= /opt/Espressif/include
-SDK_EXTRA_LIBS ?= /opt/Espressif/arch/lib
+SDK_EXTRA_INCLUDES ?= /opt/Espressif/esp-open-sdk/xtensa-lx106-elf/xtensa-lx106-elf/include
+SDK_EXTRA_LIBS ?= /opt/Espressif/esp-open-sdk/xtensa-lx106-elf/xtensa-lx106-elf/lib
 
 # base directory of the ESP8266 SDK package, absolute
-SDK_BASE	?= /opt/Espressif/ESP8266_SDK
+SDK_BASE	?= /opt/Espressif/esp-open-sdk/sdk
 
 #Esptool.py path and port
 ESPTOOL		?= esptool
-ESPPORT		?= /dev/ttyUSB0
+ESPTOOLPY	?= esptool.py
+ESPPORT		?= /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
 #ESPDELAY indicates seconds to wait between flashing the two binary images
 ESPDELAY	?= 3
 ESPBAUD		?= 115200
@@ -43,7 +44,7 @@ EXTRA_INCDIR	= include \
 LIBS		= c gcc hal phy pp net80211 wpa main lwip
 
 # compiler flags using during compilation of source files
-CFLAGS		= -Os -ggdb -std=c99 -Werror -Wpointer-arith -Wundef -Wall -Wl,-EL -fno-inline-functions \
+CFLAGS		= -Os -ggdb -std=c99 -Wpointer-arith -Wundef -Wall -Wl,-EL -fno-inline-functions \
 		-nostdlib -mlongcalls -mtext-section-literals  -D__ets__ -DICACHE_FLASH \
 		-Wno-address
 
@@ -110,7 +111,7 @@ vpath %.c $(SRC_DIR)
 define compile-objects
 $1/%.o: %.c
 	$(vecho) "CC $$<"
-	$(Q) $(CC) $(INCDIR) $(MODULE_INCDIR) $(EXTRA_INCDIR) $(SDK_INCDIR) $(CFLAGS)  -c $$< -o $$@
+	$(CC) $(INCDIR) $(MODULE_INCDIR) $(EXTRA_INCDIR) $(SDK_INCDIR) $(CFLAGS)  -c $$< -o $$@
 endef
 
 .PHONY: all checkdirs clean
@@ -119,33 +120,34 @@ all: checkdirs $(TARGET_OUT) $(FW_FILE_1) $(FW_FILE_2)
 
 $(FW_FILE_1): $(TARGET_OUT) firmware
 	$(vecho) "FW $@"
-	$(Q) $(ESPTOOL) -eo $(TARGET_OUT) $(FW_FILE_1_ARGS)
+	$(ESPTOOL) -eo $(TARGET_OUT) $(FW_FILE_1_ARGS)
 
 $(FW_FILE_2): $(TARGET_OUT) firmware
 	$(vecho) "FW $@"
-	$(Q) $(ESPTOOL) -eo $(TARGET_OUT) $(FW_FILE_2_ARGS)
+	$(ESPTOOL) -eo $(TARGET_OUT) $(FW_FILE_2_ARGS)
 
 $(TARGET_OUT): $(APP_AR)
 	$(vecho) "LD $@"
-	$(Q) $(LD) -L$(SDK_LIBDIR) $(LD_SCRIPT) $(LDFLAGS) -Wl,--start-group $(LIBS) $(APP_AR) -Wl,--end-group -o $@
+	$(LD) -L$(SDK_LIBDIR) $(LD_SCRIPT) $(LDFLAGS) -Wl,--start-group $(LIBS) $(APP_AR) -Wl,--end-group -o $@
 
 $(APP_AR): $(OBJ)
 	$(vecho) "AR $@"
-	$(Q) $(AR) cru $@ $^
+	$(AR) cru $@ $^
 
 checkdirs: $(BUILD_DIR) $(FW_BASE)
 
 $(BUILD_DIR):
-	$(Q) mkdir -p $@
+	mkdir -p $@
 
 firmware:
-	$(Q) mkdir -p $@
+	mkdir -p $@
 
 flash: $(FW_FILE_1) $(FW_FILE_2)
-	$(Q) $(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x00000 -cf firmware/0x00000.bin -v
-	$(Q) [ $(ESPDELAY) -ne 0 ] && echo "Please put the ESP in bootloader mode..." || true
-	$(Q) sleep $(ESPDELAY) || true
-	$(Q) $(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x40000 -cf firmware/0x40000.bin -v
+	$(ESPTOOLPY) --port $(ESPPORT) write_flash 0x00000 firmware/0x00000.bin 0x40000 firmware/0x40000.bin
+#	$(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x00000 -cf firmware/0x00000.bin -v
+#	[ $(ESPDELAY) -ne 0 ] && echo "Please put the ESP in bootloader mode..." || true
+#	sleep $(ESPDELAY) || true
+#	$(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x40000 -cf firmware/0x40000.bin -v
 
 webpages.espfs: html/ html/wifi/ mkespfsimage/mkespfsimage
 	cd html; find | ../mkespfsimage/mkespfsimage > ../webpages.espfs; cd ..
@@ -155,16 +157,18 @@ mkespfsimage/mkespfsimage: mkespfsimage/
 
 htmlflash: webpages.espfs
 	if [ $$(stat -c '%s' webpages.espfs) -gt $$(( 0x2E000 )) ]; then echo "webpages.espfs too big!"; false; fi
-	$(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x12000 -cf webpages.espfs -v
+	$(ESPTOOLPY) --port $(ESPPORT) write_flash 0x12000 webpages.espfs
+#	if [ $$(stat -c '%s' webpages.espfs) -gt $$(( 0x2E000 )) ]; then echo "webpages.espfs too big!"; false; fi
+#	$(ESPTOOL) -cp $(ESPPORT) -cb $(ESPBAUD) -ca 0x12000 -cf webpages.espfs -v
 
 clean:
-	$(Q) rm -f $(APP_AR)
-	$(Q) rm -f $(TARGET_OUT)
-	$(Q) find $(BUILD_BASE) -type f | xargs rm -f
+	rm -f $(APP_AR)
+	rm -f $(TARGET_OUT)
+	find $(BUILD_BASE) -type f | xargs rm -f
 
 
-	$(Q) rm -f $(FW_FILE_1)
-	$(Q) rm -f $(FW_FILE_2)
-	$(Q) rm -rf $(FW_BASE)
+	rm -f $(FW_FILE_1)
+	rm -f $(FW_FILE_2)
+	rm -rf $(FW_BASE)
 
 $(foreach bdir,$(BUILD_DIR),$(eval $(call compile-objects,$(bdir))))

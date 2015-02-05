@@ -6,7 +6,7 @@
 #define _STDLIB_H_
 #define _STRING_H_
 #define _STDDEF_H
-#define _STDINT_H
+//#define _STDINT_H
 
 #include "espmissingincludes.h"
 #include "c_types.h"

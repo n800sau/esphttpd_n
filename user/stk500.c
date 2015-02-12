@@ -273,7 +273,7 @@ void program(int size, char *buf)
 	progState = 0;
 	error = 0;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
-	os_timer_arm(&delayTimer, 2000, 1);
+	os_timer_arm(&delayTimer, 100, 1);
 }
 
 void init_stk500()

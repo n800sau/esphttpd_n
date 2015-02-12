@@ -259,4 +259,3 @@ void ICACHE_FLASH_ATTR tplWlan(HttpdConnData *connData, char *token, void **arg)
 	httpdSend(connData, buff, -1);
 }
 
-

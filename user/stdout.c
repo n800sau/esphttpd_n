@@ -13,7 +13,8 @@
 #include "espmissingincludes.h"
 #include "ets_sys.h"
 #include "osapi.h"
-#include "uart_hw.h"
+//#include "uart_hw.h"
+#include "driver/uart.h"
 
 static void ICACHE_FLASH_ATTR stdoutUartTxd(char c) {
 	//Wait until there is room in the FIFO
@@ -30,8 +31,11 @@ static void ICACHE_FLASH_ATTR stdoutPutchar(char c) {
 
 
 void stdoutInit() {
+
+	uart_init(BIT_RATE_115200, BIT_RATE_115200);
+
 	//Enable TxD pin
-	PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);
+/*	PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD);
 	
 	//Set baud rate and other serial parameters to 115200,n,8,1
@@ -47,4 +51,4 @@ void stdoutInit() {
 
 	//Install our own putchar handler
 	os_install_putc1((void *)stdoutPutchar);
-}
+*/}

@@ -12,7 +12,7 @@ flash as a binary. Also handles the hit counter on the main page.
  * ----------------------------------------------------------------------------
  */
 
-
+#include "stk500.h"
 #include <string.h>
 #include <osapi.h>
 #include "user_interface.h"
@@ -20,6 +20,7 @@ flash as a binary. Also handles the hit counter on the main page.
 #include "httpd.h"
 #include "cgi.h"
 #include "io.h"
+#include "base64.h"
 #include <ip_addr.h>
 #include "espmissingincludes.h"
 
@@ -101,4 +102,25 @@ int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
 	*pos+=1024;
 	if (*pos>=0x40200000+(512*1024)) return HTTPD_CGI_DONE; else return HTTPD_CGI_MORE;
 }
+
+int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData) {
+
+	if(connData->postLen <= 0) {
+		os_printf("Send Error\n");
+		return HTTPD_CGI_ERROR;
+	}
+	if (connData->conn==NULL) {
+		//Connection aborted. Clean up.
+		os_printf("Aborted\n");
+		return HTTPD_CGI_DONE;
+	}
+
+	base64_decode(connData->postLen, connData->postBuff, connData->postLen, connData->postBuff);
+	program(connData->postLen, connData->postBuff);
+	connData->postBuff = NULL;
+	connData->postLen = 0;
+	httpdRedirect(connData, "/programming.html");
+	return HTTPD_CGI_DONE;
+}
+
 

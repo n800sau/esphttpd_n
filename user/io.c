@@ -17,8 +17,8 @@
 #include "gpio.h"
 #include "espmissingincludes.h"
 
-#define LEDGPIO 2
-#define BTNGPIO 0
+#define LEDGPIO 5
+#define BTNGPIO 14
 
 static ETSTimer resetBtntimer;
 

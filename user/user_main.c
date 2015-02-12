@@ -11,6 +11,7 @@
 
 
 #include "espmissingincludes.h"
+#include <user_interface.h>
 #include "ets_sys.h"
 #include "osapi.h"
 #include "httpd.h"
@@ -20,6 +21,8 @@
 #include "cgiwifi.h"
 #include "stdout.h"
 #include "auth.h"
+#include "driver/uart.h"
+#include "stk500.h"
 
 //Function that tells the authentication system what users/passwords live on the system.
 //This is disabled in the default build; if you want to try it, enable the authBasic line in
@@ -55,6 +58,7 @@ HttpdBuiltInUrl builtInUrls[]={
 	{"/led.tpl", cgiEspFsTemplate, tplLed},
 	{"/index.tpl", cgiEspFsTemplate, tplCounter},
 	{"/led.cgi", cgiLed, NULL},
+	{"/program.cgi", cgiProgram, NULL},
 
 	//Routines to make the /wifi URL and everything beneath it work.
 
@@ -75,8 +79,16 @@ HttpdBuiltInUrl builtInUrls[]={
 
 //Main routine. Initialize stdout, the I/O and the webserver and we're done.
 void user_init(void) {
+
+
+
 	stdoutInit();
-	ioInit();
+
+	os_printf("\n\n\n\n\n\n\n\n");
+    os_printf("SDK version:%s\n", system_get_sdk_version());
+
+//	ioInit();
 	httpdInit(builtInUrls, 80);
+	init_stk500();
 	os_printf("\nReady\n");
 }

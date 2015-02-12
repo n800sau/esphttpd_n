@@ -30,7 +30,7 @@ Esp8266 http server - core routines
 //Max amount of connections
 #define MAX_CONN 8
 //Max post buffer len
-#define MAX_POST 1024
+#define MAX_POST 32768
 //Max send buffer len
 #define MAX_SENDBUFF_LEN 2048
 
@@ -273,17 +273,17 @@ static void ICACHE_FLASH_ATTR httpdSentCb(void *arg) {
 		os_printf("Conn %p is done. Closing.\n", conn->conn);
 		espconn_disconnect(conn->conn);
 		httpdRetireConn(conn);
-		return; //No need to call xmitSendBuff.
+	} else {
+		r=conn->cgi(conn); //Execute cgi fn.
+		if (r==HTTPD_CGI_DONE) {
+			conn->cgi=NULL; //mark for destruction.
+		}
+		xmitSendBuff(conn);
 	}
-
-	r=conn->cgi(conn); //Execute cgi fn.
-	if (r==HTTPD_CGI_DONE) {
-		conn->cgi=NULL; //mark for destruction.
-	}
-	xmitSendBuff(conn);
 }
 
 static const char *httpNotFoundHeader="HTTP/1.0 404 Not Found\r\nServer: esp8266-httpd/0.1\r\nContent-Type: text/plain\r\n\r\nNot Found.\r\n";
+static const char *httpErrorHeader="HTTP/1.0 500 Internal Server Error\r\nServer: esp8266-httpd/0.1\r\nContent-Type: text/plain\r\n\r\nInternal Server Error.\r\n";
 
 //This is called when the headers have been received and the connection is ready to send
 //the result headers and data.
@@ -298,13 +298,21 @@ static void ICACHE_FLASH_ATTR httpdSendResp(HttpdConnData *conn) {
 		if (builtInUrls[i].url[os_strlen(builtInUrls[i].url)-1]=='*' &&
 				os_strncmp(builtInUrls[i].url, conn->url, os_strlen(builtInUrls[i].url)-1)==0) match=1;
 		if (match) {
-			os_printf("Is url index %d\n", i);
+			os_printf("Url index %d\n", i);
 			conn->cgiData=NULL;
 			conn->cgi=builtInUrls[i].cgiCb;
 			conn->cgiArg=builtInUrls[i].cgiArg;
 			r=conn->cgi(conn);
 			if (r!=HTTPD_CGI_NOTFOUND) {
-				if (r==HTTPD_CGI_DONE) conn->cgi=NULL;  //If cgi finishes immediately: mark conn for destruction.
+				switch(r) {
+					case HTTPD_CGI_ERROR:
+						os_printf("%s error. 500!\n", conn->url);
+						httpdSend(conn, httpErrorHeader, -1);
+						break;
+					case HTTPD_CGI_DONE:
+						conn->cgi=NULL;  //If cgi finishes immediately: mark conn for destruction.
+						break;
+				}
 				return;
 			}
 		}
@@ -350,11 +358,16 @@ static void ICACHE_FLASH_ATTR httpdParseHeader(char *h, HttpdConnData *conn) {
 		//Get POST data length
 		conn->postLen=atoi(h+i+1);
 		//Clamp if too big. Hmm, maybe we should error out instead?
-		if (conn->postLen>MAX_POST) conn->postLen=MAX_POST;
-		os_printf("Mallocced buffer for %d bytes of post data.\n", conn->postLen);
-		//Alloc the memory.
-		conn->postBuff=(char*)os_malloc(conn->postLen+1);
-		conn->priv->postPos=0;
+		if (conn->postLen>MAX_POST) {
+			os_printf("Error. Post file size is %d. Maximum is %d bytes.\n", conn->postLen, MAX_POST);
+			conn->postLen=0;
+			return;
+		} else {
+			os_printf("Mallocced buffer for %d bytes of post data.\n", conn->postLen);
+			//Alloc the memory.
+			conn->postBuff=(char*)os_malloc(conn->postLen+1);
+			conn->priv->postPos=0;
+		}
 	}
 }
 
@@ -372,8 +385,10 @@ static void ICACHE_FLASH_ATTR httpdRecvCb(void *arg, char *data, unsigned short 
 	for (x=0; x<len; x++) {
 		if (conn->postLen<0) {
 			//This byte is a header byte.
-			if (conn->priv->headPos!=MAX_HEAD_LEN) conn->priv->head[conn->priv->headPos++]=data[x];
-			conn->priv->head[conn->priv->headPos]=0;
+			if (conn->priv->headPos!=MAX_HEAD_LEN) {
+				conn->priv->head[conn->priv->headPos++]=data[x];
+				conn->priv->head[conn->priv->headPos]=0;
+			}
 			//Scan for /r/n/r/n
 			if (data[x]=='\n' && (char *)os_strstr(conn->priv->head, "\r\n\r\n")!=NULL) {
 				//Indicate we're done with the headers.
@@ -394,17 +409,16 @@ static void ICACHE_FLASH_ATTR httpdRecvCb(void *arg, char *data, unsigned short 
 					httpdSendResp(conn);
 				}
 			}
-		} else if (conn->priv->postPos!=-1 && conn->postLen!=0 && conn->priv->postPos <= conn->postLen) {
+		} else if (conn->priv->postPos!=-1 && conn->postLen>0 && conn->priv->postPos <= conn->postLen) {
 			//This byte is a POST byte.
 			conn->postBuff[conn->priv->postPos++]=data[x];
 			if (conn->priv->postPos>=conn->postLen) {
 				//Received post stuff.
 				conn->postBuff[conn->priv->postPos]=0; //zero-terminate
 				conn->priv->postPos=-1;
-				os_printf("Post data: %s\n", conn->postBuff);
+//				os_printf("Post data: %s\n", conn->postBuff);
 				//Send the response.
 				httpdSendResp(conn);
-				break;
 			}
 		}
 	}

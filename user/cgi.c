@@ -106,7 +106,7 @@ int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
 int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData) {
 
 	if(connData->postLen <= 0) {
-		os_printf("Send Error\n");
+		os_printf("Error post len=%d\n", connData->postLen);
 		return HTTPD_CGI_ERROR;
 	}
 	if (connData->conn==NULL) {

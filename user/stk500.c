@@ -82,6 +82,7 @@ int stk_tick = 0;
 int stk_stage = 0;
 int stk_error = 0;
 const char *stk_error_descr = NULL;
+char stk_major, stk_minor, stk_signature[3];
 
 static int in_sync(char fb, char lb)
 {
@@ -111,7 +112,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	static int sync_cnt;
 	static int address = 0, bufpos;
 	char ok, insync, laddress, haddress, *bp, snum[3];
-	static char major, minor, signature[3];
 	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
@@ -161,7 +161,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 			case 2:
 				if(count_chars() >= 3) {
 					insync = get_char(); // STK_INSYNC
-					major = get_char(); // STK_SW_MJAOR
+					stk_major = get_char(); // STK_SW_MJAOR
 					ok = get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
 						uart_tx_one_char(0x41);
@@ -178,11 +178,12 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 			case 3:
 				if(count_chars() >= 3) {
 					insync = get_char(); // STK_INSYNC
-					minor = get_char(); // STK_SW_MJAOR
+					stk_minor = get_char(); // STK_SW_MJAOR
 					ok = get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
-						os_printf("bootloader version %d.%d\n", major, minor);
+						os_printf("bootloader version %d.%d\n", stk_major, stk_minor);
 						os_printf("entering prog mode\n");
+						bufpos = 0;
 						uart_tx_one_char(0x50);
 						uart_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
@@ -210,12 +211,12 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 			case 5:
 				if(count_chars() >= 3) {
 					insync = get_char(); // STK_INSYNC
-					signature[0] = get_char();
-					signature[1] = get_char();
-					signature[2] = get_char();
+					stk_signature[0] = get_char();
+					stk_signature[1] = get_char();
+					stk_signature[2] = get_char();
 					ok = get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
-						os_printf("signature %d-%d-%d\n", signature[0], signature[1], signature[2]);
+						os_printf("signature %d-%d-%d\n", stk_signature[0], stk_signature[1], stk_signature[2]);
 						address = 0;
 						stk_stage = 6;
 						stk_tick = 0;
@@ -228,7 +229,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				laddress = address & 0xFF;
 				haddress = address >> 8 & 0xff;
 				os_printf("set page addr: %4X\n", address);
-				bufpos = 0;
 				// skip two lines
 /*				i = 0;
 				while(bufpos < buflen) {
@@ -299,6 +299,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						if(bufpos >= buflen) {
 							// end of buffer - stop/go to the next stage
 							stk_stage = 8;
+						} else {
+							// to send address again
+							stk_stage = 6;
 						}
 						stk_tick = 0;
 					} else {
@@ -355,6 +358,8 @@ void program(int size, char *buf)
 	stk_tick = 0;
 	stk_error = 0;
 	stk_error_descr = NULL;
+	stk_major = stk_minor = 0;
+	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
 	os_timer_arm(&delayTimer, 100, 1);
 }

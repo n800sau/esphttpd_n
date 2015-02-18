@@ -144,6 +144,12 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 			os_sprintf(buff, "%d", stk_tick);
 		}
 	}
+	if (os_strcmp(token, "bl_version")==0) {
+		os_sprintf(buff, "%d.%d", stk_major, stk_minor);
+	}
+	if (os_strcmp(token, "signature")==0) {
+		os_sprintf(buff, "%d.%d.%d", stk_signature[0], stk_signature[1], stk_signature[2]);
+	}
 	httpdSend(connData, buff, -1);
 }
 

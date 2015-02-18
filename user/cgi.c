@@ -103,7 +103,8 @@ int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
 	if (*pos>=0x40200000+(512*1024)) return HTTPD_CGI_DONE; else return HTTPD_CGI_MORE;
 }
 
-int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData) {
+int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
+{
 
 	if(connData->postLen <= 0) {
 		os_printf("Error post len=%d\n", connData->postLen);
@@ -119,8 +120,30 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData) {
 	program(connData->postLen, connData->postBuff);
 	connData->postBuff = NULL;
 	connData->postLen = 0;
-	httpdRedirect(connData, "/programming.html");
+	httpdRedirect(connData, "/programming.tpl");
 	return HTTPD_CGI_DONE;
 }
 
+void tplProgramming(HttpdConnData *connData, char *token, void **arg)
+{
+	char buff[128];
+	if (token==NULL) return;
+	os_strcpy(buff, "");
+	if(stk_stage >= 10) {
+		if (os_strcmp(token, "prog_status")==0) {
+			os_strcpy(buff, "finished");
+		}
+	} else {
+		if (os_strcmp(token, "prog_status")==0) {
+			os_sprintf(buff, "%s %d", (stk_error) ? "error occured at stage": "at stage", stk_stage);
+		}
+		if (os_strcmp(token, "status_msg")==0) {
+			os_sprintf(buff, "%s", (stk_error_descr) ? stk_error_descr: "");
+		}
+		if (os_strcmp(token, "tick")==0) {
+			os_sprintf(buff, "%d", stk_tick);
+		}
+	}
+	httpdSend(connData, buff, -1);
+}
 

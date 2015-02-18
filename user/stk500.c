@@ -36,7 +36,7 @@ static char get_char()
 		memmove(uart_buf, uart_buf+1, sizeof(uart_buf) - 1);
 		buf_pos--;
 	}
-	os_printf("get char : %2X\n", rs);
+//	os_printf("get char : %2X\n", rs);
 	return rs;
 }
 
@@ -63,8 +63,7 @@ static void ICACHE_FLASH_ATTR recvCharTaskCb(os_event_t *events)
 
 		temp = READ_PERI_REG(UART_FIFO(UART0)) & 0xFF;
 		add_char(temp);
-		os_printf("char=%2X\n", temp);
-
+//		os_printf("char=%2X\n", temp);
 	}
 	if(UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
 		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_FULL_INT_CLR);
@@ -79,17 +78,18 @@ static ETSTimer delayTimer;
 static int buflen = 0;
 static char *bufptr = NULL;
 
-static int progState = 0;
-static int tick = 0;
-static int error = 0;
+int stk_tick = 0;
+int stk_stage = 0;
+int stk_error = 0;
+const char *stk_error_descr = NULL;
 
 static int in_sync(char fb, char lb)
 {
 	int rs = fb == 0x14 && lb == 0x10;
 	if(rs) {
-		os_printf("in sync\n");
+		os_printf(stk_error_descr="in sync\n");
 	} else {
-		os_printf("OUT of sync: %d %d\n", fb, lb);
+		os_printf(stk_error_descr="OUT of sync: %d %d\n", fb, lb);
 	}
 	return rs;
 }
@@ -112,21 +112,21 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	static int address = 0, bufpos;
 	char ok, insync, laddress, haddress, *bp, snum[3];
 	static char major, minor, signature[3];
-	os_printf("state=%d, tick %d\n", progState, tick);
-	tick++;
-	if(tick > TICK_MAX) {
-		os_printf("stk timeout...\n");
-		stop_ticking();
+	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
+	stk_tick++;
+	if(stk_tick > TICK_MAX) {
+		os_printf(stk_error_descr = "stk timeout...\n");
+		stk_error = 1;
 	} else {
-		switch(progState) {
+		switch(stk_stage) {
 			case 0:
 				clean_chars();
 				sync_cnt = 0;
 				os_printf("syncing\n");
 				uart_tx_one_char(0x30);
 				uart_tx_one_char(0x20);
-				progState = 1;
-				tick = 0;
+				stk_stage = 1;
+				stk_tick = 0;
 				break;
 			case 1:
 				if(count_chars() >= 2) {
@@ -138,13 +138,13 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x81);
 						uart_tx_one_char(0x20);
 						os_printf("receiving MAJOR version\n");
-						progState = 2;
-						tick = 0;
+						stk_stage = 2;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				} else {
-					if(tick % SYNC_STEP == 0) {
+					if(stk_tick % SYNC_STEP == 0) {
 						if(sync_cnt < 5) {
 							clean_chars();
 							sync_cnt++;
@@ -152,8 +152,8 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 							uart_tx_one_char(0x30);
 							uart_tx_one_char(0x20);
 						} else {
-							os_printf("not connected\n");
-							stop_ticking();
+							os_printf(stk_error_descr = "not connected\n");
+							stk_error = 1;
 						}
 					}
 				}
@@ -168,10 +168,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x82);
 						uart_tx_one_char(0x20);
 						os_printf("receiving MINOR version\n");
-						progState = 3;
-						tick = 0;
+						stk_stage = 3;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -186,10 +186,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x50);
 						uart_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
-						progState = 4;
-						tick = 0;
+						stk_stage = 4;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -201,9 +201,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x75);
 						uart_tx_one_char(0x20);
 						os_printf("receiving signature\n");
-						progState = 5;
+						stk_stage = 5;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -217,10 +217,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					if(in_sync(insync, ok)) {
 						os_printf("signature %d-%d-%d\n", signature[0], signature[1], signature[2]);
 						address = 0;
-						progState = 6;
-						tick = 0;
+						stk_stage = 6;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -246,8 +246,8 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				uart_tx_one_char(laddress);
 				uart_tx_one_char(haddress);
 				uart_tx_one_char(0x20); // SYNC_CRC_EOP
-				progState = 7;
-				tick = 0;
+				stk_stage = 7;
+				stk_tick = 0;
 				break;
 			case 7:
 				if(count_chars() >= 2) {
@@ -298,11 +298,11 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x20); // SYNC_CRC_EOP
 						if(bufpos >= buflen) {
 							// end of buffer - stop/go to the next stage
-							progState = 8;
+							stk_stage = 8;
 						}
-						tick = 0;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -314,10 +314,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						os_printf("leaving prog mode\n");
 						uart_tx_one_char(0x51);
 						uart_tx_one_char(0x20);
-						progState = 9;
-						tick = 0;
+						stk_stage = 9;
+						stk_tick = 0;
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
@@ -326,16 +326,17 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					insync = get_char();
 					ok = get_char();
 					if(in_sync(insync, ok)) {
+						stk_stage = 10;
 						os_printf("end\n");
 						stop_ticking();
 					} else {
-						error = 1;
+						stk_error = 1;
 					}
 				}
 				break;
 		}
 	}
-	if(error) {
+	if(stk_error) {
 		os_printf("Error occured\n");
 		stop_ticking();
 	}
@@ -350,9 +351,10 @@ void program(int size, char *buf)
 	}
 	bufptr = buf;
 	buflen = size;
-	progState = 0;
-	tick = 0;
-	error = 0;
+	stk_stage = 0;
+	stk_tick = 0;
+	stk_error = 0;
+	stk_error_descr = NULL;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
 	os_timer_arm(&delayTimer, 100, 1);
 }

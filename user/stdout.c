@@ -32,7 +32,7 @@ static void ICACHE_FLASH_ATTR stdoutPutchar(char c) {
 
 void stdoutInit() {
 
-	uart_init(BIT_RATE_115200, BIT_RATE_115200);
+	uart_init(BIT_RATE_57600, BIT_RATE_115200);
 
 	//Enable TxD pin
 /*	PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);

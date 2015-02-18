@@ -19,10 +19,10 @@
 #include "httpdespfs.h"
 #include "cgi.h"
 #include "cgiwifi.h"
-#include "stdout.h"
 #include "auth.h"
 #include "driver/uart.h"
 #include "stk500.h"
+#include <gpio.h>
 
 //Function that tells the authentication system what users/passwords live on the system.
 //This is disabled in the default build; if you want to try it, enable the authBasic line in
@@ -78,12 +78,24 @@ HttpdBuiltInUrl builtInUrls[]={
 };
 
 
-//Main routine. Initialize stdout, the I/O and the webserver and we're done.
+//Main routine. Initialize uart, the I/O and the webserver and we're done.
 void user_init(void) {
 
 
+	gpio_init();
 
-	stdoutInit();
+	//set gpio5 as gpio pin
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
+
+	//disable pulldown
+	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_GPIO5_U);
+
+	//enable pull up R
+	PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO5_U);
+
+	GPIO_OUTPUT_SET(5, 1);
+
+	uart_init(BIT_RATE_57600, BIT_RATE_115200);
 
 	os_printf("\n\n\n\n\n\n\n\n");
     os_printf("SDK version:%s\n", system_get_sdk_version());

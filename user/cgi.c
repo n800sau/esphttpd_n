@@ -129,7 +129,7 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 	char buff[128];
 	if (token==NULL) return;
 	os_strcpy(buff, "");
-	if(stk_stage >= 10) {
+	if(stk_stage >= 11) {
 		if (os_strcmp(token, "prog_status")==0) {
 			os_strcpy(buff, "finished");
 		}

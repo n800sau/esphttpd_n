@@ -6,6 +6,7 @@
 #include "espmissingincludes.h"
 #include "driver/uart.h"
 #include <mem.h>
+#include <gpio.h>
 
 #define UART_BUF_SIZE 100
 static char uart_buf[UART_BUF_SIZE];
@@ -298,10 +299,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						uart_tx_one_char(0x20); // SYNC_CRC_EOP
 						if(bufpos >= buflen) {
 							// end of buffer - stop/go to the next stage
-							stk_stage = 8;
+							stk_stage = 9;
 						} else {
-							// to send address again
-							stk_stage = 6;
+							// wait for sync then next block
+							stk_stage = 8;
 						}
 						stk_tick = 0;
 					} else {
@@ -314,10 +315,8 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					insync = get_char();
 					ok = get_char();
 					if(in_sync(insync, ok)) {
-						os_printf("leaving prog mode\n");
-						uart_tx_one_char(0x51);
-						uart_tx_one_char(0x20);
-						stk_stage = 9;
+						// to send address again
+						stk_stage = 6;
 						stk_tick = 0;
 					} else {
 						stk_error = 1;
@@ -329,7 +328,22 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					insync = get_char();
 					ok = get_char();
 					if(in_sync(insync, ok)) {
+						os_printf("leaving prog mode\n");
+						uart_tx_one_char(0x51);
+						uart_tx_one_char(0x20);
 						stk_stage = 10;
+						stk_tick = 0;
+					} else {
+						stk_error = 1;
+					}
+				}
+				break;
+			case 10:
+				if(count_chars() >= 2) {
+					insync = get_char();
+					ok = get_char();
+					if(in_sync(insync, ok)) {
+						stk_stage = 11;
 						os_printf("end\n");
 						stop_ticking();
 					} else {
@@ -361,6 +375,10 @@ void program(int size, char *buf)
 	stk_major = stk_minor = 0;
 	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
+	// reset on gpio5
+	GPIO_OUTPUT_SET(5, 0);
+	os_delay_us(100);
+	GPIO_OUTPUT_SET(5, 1);
 	os_timer_arm(&delayTimer, 100, 1);
 }
 

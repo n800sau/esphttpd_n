@@ -2,6 +2,8 @@
 #define UART_APP_H
 
 #include "uart_register.h"
+#include <eagle_soc.h>
+#include <stdint.h>
 
 #define recvCharTaskPrio        0
 #define recvCharTaskQueueLen    64
@@ -99,6 +101,7 @@ typedef struct {
 
 void uart_init(UartBautRate uart0_br, UartBautRate uart1_br);
 void ICACHE_FLASH_ATTR uart1_write_char(char c);
+void ICACHE_FLASH_ATTR uart0_change_rate(UartBautRate uart0_br);
 
 #endif
 

@@ -22,7 +22,6 @@ Please choose serial port baud rate:
 <option value="38400">38400</option>
 <option value="57600" selected="selected">57600 (Pro 328)</option>
 <option value="115200">115200 (Mini 328)</option>
-<option value="144000">144000 (Orangutan 328, Orangutan 168)</option>
 </select>
 <p>
 Please choose a file:<br>

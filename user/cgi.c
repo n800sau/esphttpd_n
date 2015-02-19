@@ -16,6 +16,7 @@ flash as a binary. Also handles the hit counter on the main page.
 #include <string.h>
 #include <osapi.h>
 #include "user_interface.h"
+#include <driver/uart.h>
 #include "mem.h"
 #include "httpd.h"
 #include "cgi.h"
@@ -125,6 +126,25 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 	sz = httpdFindMultipartArg(connData->postBuff, connData->postLen, connData->boundary, "datafile", &p);
 	os_printf("file size=%d\n", sz);
 //	os_printf("file:\n%s\n", p);
+	switch(baud) {
+		case 19200:
+			baud = BIT_RATE_19200;
+			break;
+		case 38400:
+			baud = BIT_RATE_38400;
+			break;
+		case 57600:
+			baud = BIT_RATE_57600;
+			break;
+		case 115200:
+			baud = BIT_RATE_115200;
+			break;
+		default:
+			baud = 0;
+			break;
+	}
+	if(baud)
+		uart0_change_rate(baud);
 	program(sz, p);
 	httpdRedirect(connData, "/programming.tpl");
 	return HTTPD_CGI_DONE;

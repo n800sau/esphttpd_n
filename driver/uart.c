@@ -9,6 +9,7 @@
  * Modification history:
  *     2014/3/12, v1.0 create this file.
 *******************************************************************************/
+#include "espmissingincludes.h"
 #include "ets_sys.h"
 #include "osapi.h"
 #include "driver/uart.h"
@@ -111,7 +112,6 @@ LOCAL void uart0_rx_intr_handler(void *para)
   /* uart0 and uart1 intr combine togther, when interrupt occur, see reg 0x3ff20020, bit2, bit0 represents
     * uart1 and uart0 respectively
     */
-  uint8 RcvChar;
   uint8 uart_no = UART0;
 
   if(UART_FRM_ERR_INT_ST == (READ_PERI_REG(UART_INT_ST(uart_no)) & UART_FRM_ERR_INT_ST))
@@ -149,6 +149,14 @@ void ICACHE_FLASH_ATTR uart0_tx_buffer(uint8 *buf, uint16 len)
     for (i = 0; i < len; i++) {
         uart_tx_one_char(buf[i]);
     }
+}
+
+void ICACHE_FLASH_ATTR uart0_change_rate(UartBautRate uart0_br)
+{
+    ETS_UART_INTR_DISABLE();
+    UartDev.baut_rate = uart0_br;
+    uart_config(UART0);
+    ETS_UART_INTR_ENABLE();
 }
 
 /******************************************************************************

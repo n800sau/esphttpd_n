@@ -18,6 +18,9 @@ static int buf_pos = 0;
 #define SYNC_PAUSE 500
 #define SYNC_STEP (SYNC_PAUSE / TICK_TIME)
 
+// gpio 4, 5, 12, 13, 14, 15
+
+
 static void add_char(char c)
 {
 	uart_buf[buf_pos] = c;

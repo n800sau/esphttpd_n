@@ -1,11 +1,12 @@
 <html>
 <head><title>Esp8266 N web server</title>
+
 <link rel="stylesheet" type="text/css" href="style.css">
+
 </head>
 <body>
 <div id="main">
-If you see this, it means the tiny li'l website in your ESP8266 does actually work. Fyi, this page has
-been loaded <b>%counter%</b> times.
+ESP8266 esphttpd_n site. This page has been loaded <b>%counter%</b> times.
 <ul>
 <li>If you haven't connected this device to your WLAN network now, you can <a href="/wifi">do so.</a></li>
 <li>You can also control the <a href="led.tpl">LED</a>.</li>
@@ -13,13 +14,24 @@ been loaded <b>%counter%</b> times.
 </ul>
 </p>
 
+<h2>You can upload a hex file to flash connected Arduino</h2>
 <form action="/program.cgi" enctype="multipart/form-data" method="post">
+Please choose serial port baud rate:
+<select name="baud">
+<option value="19200">19200 (Pro 168, Mini 168)</option>
+<option value="38400">38400</option>
+<option value="57600" selected="selected">57600 (Pro 328)</option>
+<option value="115200">115200 (Mini 328)</option>
+<option value="144000">144000 (Orangutan 328, Orangutan 168)</option>
+</select>
 <p>
-Please specify a file, or a set of files:<br>
+Please choose a file:<br>
 <input type="file" name="datafile" size="40">
 </p>
 <input type="submit" value="Send">
 </form>
 </p>
 </div>
-</body></html>
+
+</body>
+</html>

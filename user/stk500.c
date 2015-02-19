@@ -99,7 +99,10 @@ static int in_sync(char fb, char lb)
 static void stop_ticking()
 {
 	os_timer_disarm(&delayTimer);
-	os_free(bufptr);
+	if(bufptr) {
+		os_printf("free bufptr\n");
+		os_free(bufptr);
+	}
 	bufptr = NULL;
 	buflen = 0;
 }
@@ -363,10 +366,13 @@ void program(int size, char *buf)
 {
 	os_timer_disarm(&delayTimer);
 	if(bufptr != NULL) {
+		os_printf("free bufptr\n");
 		// clean old buffer
 		os_free(bufptr);
 	}
-	bufptr = buf;
+	os_printf("malloc bufptr\n");
+	bufptr = os_malloc(size);
+	os_memcpy(bufptr, buf, size);
 	buflen = size;
 	stk_stage = 0;
 	stk_tick = 0;

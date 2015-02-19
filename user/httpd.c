@@ -30,7 +30,7 @@ Esp8266 http server - core routines
 //Max amount of connections
 #define MAX_CONN 8
 //Max post buffer len
-#define MAX_POST 32768
+#define MAX_POST 30000
 //Max send buffer len
 #define MAX_SENDBUFF_LEN 2048
 
@@ -100,10 +100,13 @@ static HttpdConnData ICACHE_FLASH_ATTR *httpdFindConnData(void *arg) {
 
 //Retires a connection for re-use
 static void ICACHE_FLASH_ATTR httpdRetireConn(HttpdConnData *conn) {
-	if (conn->postBuff!=NULL) os_free(conn->postBuff);
-	conn->postBuff=NULL;
-	conn->cgi=NULL;
-	conn->conn=NULL;
+	if (conn->postBuff != NULL) {
+		os_printf("free postBuff\n");
+		os_free(conn->postBuff);
+	}
+	conn->postBuff = NULL;
+	conn->cgi = NULL;
+	conn->conn = NULL;
 }
 
 //Stupid li'l helper function that returns the value of a hex char.
@@ -152,7 +155,7 @@ int ICACHE_FLASH_ATTR httpdFindArg(char *line, char *arg, char *buff, int buffLe
 	if (line==NULL) return 0;
 	p=line;
 	while(p!=NULL && *p!='\n' && *p!='\r' && *p!=0) {
-		os_printf("findArg: %s\n", p);
+		os_printf("findArg: %s in %s\n", arg, p);
 		if (os_strncmp(p, arg, os_strlen(arg))==0 && p[strlen(arg)]=='=') {
 			p+=os_strlen(arg)+1; //move p to start of value
 			e=(char*)os_strstr(p, "&");
@@ -164,6 +167,47 @@ int ICACHE_FLASH_ATTR httpdFindArg(char *line, char *arg, char *buff, int buffLe
 		if (p!=NULL) p+=1;
 	}
 	os_printf("Finding %s in %s: Not found :/\n", arg, line);
+	return -1; //not found
+}
+
+int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *postbuf, int postlen, char *boundary, char *argname, char **argptr)
+{
+	char *p, *e;
+	int argsize = 0;
+	if (postbuf==NULL) return 0;
+	p=postbuf;
+	while(p!= NULL && (p - postbuf) < postlen) {
+		if(os_strncmp(p, "Content-Disposition:", 20) == 0) {
+			p += 20;
+			e=(char*)os_strstr(p, "name=\"");
+			if(e) {
+				e+=6;
+//				os_printf("line start with %s\n", e);
+				if(os_strncmp(e, argname, os_strlen(argname)) == 0) {
+					os_printf("found %s\n", argname);
+					// find empty line
+					//skip line
+					p=(char*)os_strstr(p, "\x0d\x0a\x0d\x0a");
+					if(p) {
+						p += 4;
+						*argptr = p;
+						// find end of value
+						e=(char*)os_strstr(p, boundary);
+						if(e) {
+							argsize = e - p;
+						} else {
+							argsize = postlen - (p - postbuf);
+						}
+						return argsize;
+					}
+				}
+			}
+		}
+		// skip line
+		p=(char*)os_strstr(p, "\x0a");
+		if(p) p++;
+	}
+	os_printf("%s not found\n", argname);
 	return -1; //not found
 }
 
@@ -351,6 +395,11 @@ static void ICACHE_FLASH_ATTR httpdParseHeader(char *h, HttpdConnData *conn) {
 		} else {
 			conn->getArgs=NULL;
 		}
+	} else if (os_strncmp(h, "Content-Type: ", 14)==0) {
+		char *e = os_strstr(h+14, "boundary=");
+		if(e) {
+			os_strncpy(conn->boundary, e+9, sizeof(conn->boundary));
+		}
 	} else if (os_strncmp(h, "Content-Length: ", 16)==0) {
 		i=0;
 		//Skip trailing spaces
@@ -363,9 +412,9 @@ static void ICACHE_FLASH_ATTR httpdParseHeader(char *h, HttpdConnData *conn) {
 			conn->postLen=0;
 			return;
 		} else {
-			os_printf("Mallocced buffer for %d bytes of post data.\n", conn->postLen);
 			//Alloc the memory.
-			conn->postBuff=(char*)os_malloc(conn->postLen+1);
+			os_printf("malloc postBuf (%d bytes)\n", conn->postLen);
+			conn->postBuff = os_malloc(conn->postLen+1);
 			conn->priv->postPos=0;
 		}
 	}
@@ -474,9 +523,10 @@ static void ICACHE_FLASH_ATTR httpdConnectCb(void *arg) {
 	connData[i].priv=&connPrivData[i];
 	connData[i].conn=conn;
 	connData[i].priv->headPos=0;
-	connData[i].postBuff=NULL;
+	connData[i].postBuff = NULL;
 	connData[i].priv->postPos=0;
 	connData[i].postLen=-1;
+	connData[i].boundary[0]=0;
 
 	espconn_regist_recvcb(conn, httpdRecvCb);
 	espconn_regist_reconcb(conn, httpdReconCb);

@@ -105,6 +105,8 @@ int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
 
 int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 {
+	char *p;
+	int sz, baud;
 
 	if(connData->postLen <= 0) {
 		os_printf("Error post len=%d\n", connData->postLen);
@@ -116,10 +118,14 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 		return HTTPD_CGI_DONE;
 	}
 
-	base64_decode(connData->postLen, connData->postBuff, connData->postLen, connData->postBuff);
-	program(connData->postLen, connData->postBuff);
-	connData->postBuff = NULL;
-	connData->postLen = 0;
+	os_printf("boundary=%s\n", connData->boundary);
+	sz = httpdFindMultipartArg(connData->postBuff, connData->postLen, connData->boundary, "baud", &p);
+	baud = atoi(p);
+	os_printf("baud=%d\n", baud);
+	sz = httpdFindMultipartArg(connData->postBuff, connData->postLen, connData->boundary, "datafile", &p);
+	os_printf("file size=%d\n", sz);
+//	os_printf("file:\n%s\n", p);
+	program(sz, p);
 	httpdRedirect(connData, "/programming.tpl");
 	return HTTPD_CGI_DONE;
 }
@@ -133,7 +139,13 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 		if (os_strcmp(token, "prog_status")==0) {
 			os_strcpy(buff, "finished");
 		}
+		if (os_strcmp(token, "is_return")==0) {
+			os_strcpy(buff, "true");
+		}
 	} else {
+		if (os_strcmp(token, "is_return")==0) {
+			os_strcpy(buff, "false");
+		}
 		if (os_strcmp(token, "prog_status")==0) {
 			os_sprintf(buff, "%s %d", (stk_error) ? "error occured at stage": "at stage", stk_stage);
 		}
@@ -143,6 +155,9 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 		if (os_strcmp(token, "tick")==0) {
 			os_sprintf(buff, "%d", stk_tick);
 		}
+	}
+	if (os_strcmp(token, "is_error")==0) {
+		os_strcpy(buff, (stk_error) ? "true" : "false");
 	}
 	if (os_strcmp(token, "bl_version")==0) {
 		os_sprintf(buff, "%d.%d", stk_major, stk_minor);

@@ -1,6 +1,14 @@
 <html>
 <head>
-<meta http-equiv="refresh" content="5">
+<script>
+	if(%is_return%) {
+		setTimeout('window.location.href = "/"', 5000);
+	} else {
+		if(! %is_error%) {
+			setTimeout('window.location.reload()', 5000);
+		}
+	}
+</script>
 </head>
 <body>
 

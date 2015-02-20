@@ -8,10 +8,6 @@
 #include <mem.h>
 #include <gpio.h>
 
-#define UART_BUF_SIZE 100
-static char uart_buf[UART_BUF_SIZE];
-static int buf_pos = 0;
-
 #define TICK_TIME 100
 #define TICK_TIMEOUT 10000
 #define TICK_MAX (TICK_TIMEOUT / TICK_TIME)
@@ -19,63 +15,6 @@ static int buf_pos = 0;
 #define SYNC_STEP (SYNC_PAUSE / TICK_TIME)
 
 // gpio 4, 5, 12, 13, 14, 15
-
-
-static void add_char(char c)
-{
-	uart_buf[buf_pos] = c;
-	buf_pos++;
-	if(buf_pos >= sizeof(uart_buf)) {
-		buf_pos = sizeof(uart_buf) - 1;
-		// forget the oldest
-		memmove(uart_buf, uart_buf+1, sizeof(uart_buf) - 1);
-	}
-}
-
-static char get_char()
-{
-	char rs = -1;
-	if(buf_pos > 0) {
-		rs =  uart_buf[0];
-		memmove(uart_buf, uart_buf+1, sizeof(uart_buf) - 1);
-		buf_pos--;
-	}
-//	os_printf("get char : %2X\n", rs);
-	return rs;
-}
-
-static int count_chars()
-{
-	return buf_pos;
-}
-
-static void clean_chars()
-{
-	buf_pos = 0;
-}
-
-os_event_t recvCharTaskQueue[recvCharTaskQueueLen];
-
-static void ICACHE_FLASH_ATTR recvCharTaskCb(os_event_t *events)
-{
-	uint8_t temp;
-
-	//add transparent determine
-	while(READ_PERI_REG(UART_STATUS(UART0)) & (UART_RXFIFO_CNT << UART_RXFIFO_CNT_S))
-	{
-		WRITE_PERI_REG(0X60000914, 0x73); //WTD
-
-		temp = READ_PERI_REG(UART_FIFO(UART0)) & 0xFF;
-		add_char(temp);
-//		os_printf("char=%2X\n", temp);
-	}
-	if(UART_RXFIFO_FULL_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_FULL_INT_ST)) {
-		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_FULL_INT_CLR);
-	} else if(UART_RXFIFO_TOUT_INT_ST == (READ_PERI_REG(UART_INT_ST(UART0)) & UART_RXFIFO_TOUT_INT_ST)) {
-		WRITE_PERI_REG(UART_INT_CLR(UART0), UART_RXFIFO_TOUT_INT_CLR);
-	}
-	ETS_UART_INTR_ENABLE();
-}
 
 
 static ETSTimer delayTimer;
@@ -127,23 +66,23 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	} else {
 		switch(stk_stage) {
 			case 0:
-				clean_chars();
+				uart0_clean_chars();
 				sync_cnt = 0;
 				os_printf("syncing\n");
-				uart_tx_one_char(0x30);
-				uart_tx_one_char(0x20);
+				uart0_tx_one_char(0x30);
+				uart0_tx_one_char(0x20);
 				stk_stage = 1;
 				stk_tick = 0;
 				break;
 			case 1:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
 						os_printf("synced\n");
-						uart_tx_one_char(0x41);
-						uart_tx_one_char(0x81);
-						uart_tx_one_char(0x20);
+						uart0_tx_one_char(0x41);
+						uart0_tx_one_char(0x81);
+						uart0_tx_one_char(0x20);
 						os_printf("receiving MAJOR version\n");
 						stk_stage = 2;
 						stk_tick = 0;
@@ -153,11 +92,11 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				} else {
 					if(stk_tick % SYNC_STEP == 0) {
 						if(sync_cnt < 5) {
-							clean_chars();
+							uart0_clean_chars();
 							sync_cnt++;
 							os_printf("syncing\n");
-							uart_tx_one_char(0x30);
-							uart_tx_one_char(0x20);
+							uart0_tx_one_char(0x30);
+							uart0_tx_one_char(0x20);
 						} else {
 							os_printf(stk_error_descr = "not connected\n");
 							stk_error = 1;
@@ -166,14 +105,14 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 2:
-				if(count_chars() >= 3) {
-					insync = get_char(); // STK_INSYNC
-					stk_major = get_char(); // STK_SW_MJAOR
-					ok = get_char(); // STK_OK
+				if(uart0_count_chars() >= 3) {
+					insync = uart0_get_char(); // STK_INSYNC
+					stk_major = uart0_get_char(); // STK_SW_MJAOR
+					ok = uart0_get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
-						uart_tx_one_char(0x41);
-						uart_tx_one_char(0x82);
-						uart_tx_one_char(0x20);
+						uart0_tx_one_char(0x41);
+						uart0_tx_one_char(0x82);
+						uart0_tx_one_char(0x20);
 						os_printf("receiving MINOR version\n");
 						stk_stage = 3;
 						stk_tick = 0;
@@ -183,16 +122,16 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 3:
-				if(count_chars() >= 3) {
-					insync = get_char(); // STK_INSYNC
-					stk_minor = get_char(); // STK_SW_MJAOR
-					ok = get_char(); // STK_OK
+				if(uart0_count_chars() >= 3) {
+					insync = uart0_get_char(); // STK_INSYNC
+					stk_minor = uart0_get_char(); // STK_SW_MJAOR
+					ok = uart0_get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
 						os_printf("bootloader version %d.%d\n", stk_major, stk_minor);
 						os_printf("entering prog mode\n");
 						bufpos = 0;
-						uart_tx_one_char(0x50);
-						uart_tx_one_char(0x20);
+						uart0_tx_one_char(0x50);
+						uart0_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
 						stk_stage = 4;
 						stk_tick = 0;
@@ -202,12 +141,12 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 4:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
-						uart_tx_one_char(0x75);
-						uart_tx_one_char(0x20);
+						uart0_tx_one_char(0x75);
+						uart0_tx_one_char(0x20);
 						os_printf("receiving signature\n");
 						stk_stage = 5;
 					} else {
@@ -216,12 +155,12 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 5:
-				if(count_chars() >= 3) {
-					insync = get_char(); // STK_INSYNC
-					stk_signature[0] = get_char();
-					stk_signature[1] = get_char();
-					stk_signature[2] = get_char();
-					ok = get_char(); // STK_OK
+				if(uart0_count_chars() >= 3) {
+					insync = uart0_get_char(); // STK_INSYNC
+					stk_signature[0] = uart0_get_char();
+					stk_signature[1] = uart0_get_char();
+					stk_signature[2] = uart0_get_char();
+					ok = uart0_get_char(); // STK_OK
 					if(in_sync(insync, ok)) {
 						os_printf("signature %d-%d-%d\n", stk_signature[0], stk_signature[1], stk_signature[2]);
 						address = 0;
@@ -249,17 +188,17 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					bufpos++;
 				}
 */				address += PAGE_SIZE;
-				uart_tx_one_char(0x55); //STK_LOAD_ADDRESS
-				uart_tx_one_char(laddress);
-				uart_tx_one_char(haddress);
-				uart_tx_one_char(0x20); // SYNC_CRC_EOP
+				uart0_tx_one_char(0x55); //STK_LOAD_ADDRESS
+				uart0_tx_one_char(laddress);
+				uart0_tx_one_char(haddress);
+				uart0_tx_one_char(0x20); // SYNC_CRC_EOP
 				stk_stage = 7;
 				stk_tick = 0;
 				break;
 			case 7:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
 						os_printf("sending program page <=%d bytes\n", PAGE_SIZE);
 						memset(vals, 0, sizeof(vals));
@@ -294,15 +233,15 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 								bufpos += 2;
 							}
 						}
-						uart_tx_one_char(0x64); // STK_PROGRAM_PAGE
-						uart_tx_one_char(0); // page size
-						uart_tx_one_char(size); // page size
-						uart_tx_one_char(0x46); // flash memory, 'F'
+						uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
+						uart0_tx_one_char(0); // page size
+						uart0_tx_one_char(size); // page size
+						uart0_tx_one_char(0x46); // flash memory, 'F'
 						os_printf("size=%d\n", size);
 						for(j=0; j<size; j++) {
-							uart_tx_one_char(vals[j]);
+							uart0_tx_one_char(vals[j]);
 						}
-						uart_tx_one_char(0x20); // SYNC_CRC_EOP
+						uart0_tx_one_char(0x20); // SYNC_CRC_EOP
 						if(bufpos >= buflen) {
 							// end of buffer - stop/go to the next stage
 							stk_stage = 9;
@@ -317,9 +256,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 8:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
 						// to send address again
 						stk_stage = 6;
@@ -330,13 +269,13 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 9:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
 						os_printf("leaving prog mode\n");
-						uart_tx_one_char(0x51);
-						uart_tx_one_char(0x20);
+						uart0_tx_one_char(0x51);
+						uart0_tx_one_char(0x20);
 						stk_stage = 10;
 						stk_tick = 0;
 					} else {
@@ -345,9 +284,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 10:
-				if(count_chars() >= 2) {
-					insync = get_char();
-					ok = get_char();
+				if(uart0_count_chars() >= 2) {
+					insync = uart0_get_char();
+					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
 						stk_stage = 11;
 						os_printf("end\n");
@@ -412,5 +351,5 @@ void ICACHE_FLASH_ATTR init_reset_pin()
 
 void init_stk500()
 {
-	system_os_task(recvCharTaskCb, recvCharTaskPrio, recvCharTaskQueue, recvCharTaskQueueLen);
+	init_reset_pin();
 }

@@ -365,6 +365,14 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	}
 }
 
+void ICACHE_FLASH_ATTR reset_arduino()
+{
+	// reset on gpio5
+	GPIO_OUTPUT_SET(5, 0);
+	os_delay_us(300);
+	GPIO_OUTPUT_SET(5, 1);
+}
+
 void program(int size, char *buf)
 {
 	os_timer_disarm(&delayTimer);
@@ -383,12 +391,23 @@ void program(int size, char *buf)
 	stk_error_descr = NULL;
 	stk_major = stk_minor = 0;
 	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
+	reset_arduino();
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
-	// reset on gpio5
-	GPIO_OUTPUT_SET(5, 0);
-	os_delay_us(100);
-	GPIO_OUTPUT_SET(5, 1);
 	os_timer_arm(&delayTimer, 100, 1);
+}
+
+void ICACHE_FLASH_ATTR init_reset_pin()
+{
+	//set gpio5 as gpio pin
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
+
+	//disable pulldown
+	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_GPIO5_U);
+
+	//enable pull up R
+	PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO5_U);
+
+	GPIO_OUTPUT_SET(5, 1);
 }
 
 void init_stk500()

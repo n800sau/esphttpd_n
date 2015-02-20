@@ -84,17 +84,6 @@ void user_init(void) {
 
 	gpio_init();
 
-	//set gpio5 as gpio pin
-	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
-
-	//disable pulldown
-	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_GPIO5_U);
-
-	//enable pull up R
-	PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO5_U);
-
-	GPIO_OUTPUT_SET(5, 1);
-
 	uart_init(BIT_RATE_57600, BIT_RATE_115200);
 
 	os_printf("\n\n\n\n\n\n\n\n");

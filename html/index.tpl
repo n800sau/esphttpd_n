@@ -24,6 +24,18 @@ Please choose serial port baud rate:
 <option value="115200">115200 (Mini 328)</option>
 </select>
 <p>
+Please choose pin to reset Arduino:
+<select name="reset_pin">
+<option value="0">0</option>
+<option value="2">2</option>
+<option value="4">4</option>
+<option value="5" selected="selected">5</option>
+<option value="12">12</option>
+<option value="13">13</option>
+<option value="14">14</option>
+<option value="15">15</option>
+</select>
+<p>
 Please choose a file:<br>
 <input type="file" name="datafile" size="40">
 </p>

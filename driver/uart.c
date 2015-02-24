@@ -30,6 +30,8 @@ LOCAL void uart0_rx_intr_handler(void *para);
 static char uart_buf[UART_BUF_SIZE];
 static int buf_pos = 0;
 
+int uart0_lock = 0;
+
 void ICACHE_FLASH_ATTR uart0_add_char(char c)
 {
 	uart_buf[buf_pos] = c;
@@ -232,7 +234,7 @@ void ICACHE_FLASH_ATTR uart0_tx_buffer(uint8 *buf, uint16 len)
 	uint16 i;
 
 	for (i = 0; i < len; i++) {
-		uart0_tx_one_char(buf[i]);
+		uart0_tx_one_char((char)buf[i]);
 	}
 }
 

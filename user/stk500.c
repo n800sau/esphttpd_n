@@ -1,6 +1,5 @@
 #include "stk500.h"
 #include <osapi.h>
-//#include <stdio.h>
 #include <stdlib.h>
 #include "user_interface.h"
 #include "espmissingincludes.h"
@@ -13,6 +12,7 @@
 #define TICK_MAX (TICK_TIMEOUT / TICK_TIME)
 #define SYNC_PAUSE 500
 #define SYNC_STEP (SYNC_PAUSE / TICK_TIME)
+#define STK500_LOCK 1677
 
 // gpio 4, 5, 12, 13, 14, 15
 
@@ -47,6 +47,7 @@ static void stop_ticking()
 	}
 	bufptr = NULL;
 	buflen = 0;
+	uart0_lock = 0;
 }
 
 #define PAGE_SIZE (8*8)
@@ -330,6 +331,7 @@ void program(int size, char *buf)
 	stk_error_descr = NULL;
 	stk_major = stk_minor = 0;
 	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
+	uart0_lock = STK500_LOCK;
 	reset_arduino();
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
 	os_timer_arm(&delayTimer, 100, 1);

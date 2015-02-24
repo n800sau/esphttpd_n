@@ -22,6 +22,7 @@
 #include "auth.h"
 #include "driver/uart.h"
 #include "stk500.h"
+#include "server.h"
 #include <gpio.h>
 
 //Function that tells the authentication system what users/passwords live on the system.
@@ -81,6 +82,8 @@ HttpdBuiltInUrl builtInUrls[]={
 //Main routine. Initialize uart, the I/O and the webserver and we're done.
 void user_init(void) {
 
+// how to setup ip only
+//or change mac
 
 	gpio_init();
 
@@ -91,6 +94,8 @@ void user_init(void) {
 
 //	ioInit();
 	httpdInit(builtInUrls, 80);
+	serverInit(23);
+
 	init_stk500();
 	os_printf("\nReady\n");
 }

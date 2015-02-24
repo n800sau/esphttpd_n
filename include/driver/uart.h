@@ -12,6 +12,7 @@
 #define UART0   0
 #define UART1   1
 
+
 typedef enum {
     FIVE_BITS = 0x0,
     SIX_BITS = 0x1,
@@ -96,6 +97,8 @@ typedef struct {
     int                      buff_uart_no;  //indicate which uart use tx/rx buffer
 } UartDevice;
 
+extern int uart0_lock;
+
 void uart_init(UartBautRate uart0_br, UartBautRate uart1_br);
 void ICACHE_FLASH_ATTR uart1_write_char(char c);
 void ICACHE_FLASH_ATTR uart0_change_rate(UartBautRate uart0_br);
@@ -104,6 +107,7 @@ char ICACHE_FLASH_ATTR uart0_get_char();
 int ICACHE_FLASH_ATTR uart0_count_chars();
 void ICACHE_FLASH_ATTR uart0_clean_chars();
 STATUS ICACHE_FLASH_ATTR uart0_tx_one_char(uint8 TxChar);
+void ICACHE_FLASH_ATTR uart0_tx_buffer(uint8 *buf, uint16 len);
 
 #endif
 

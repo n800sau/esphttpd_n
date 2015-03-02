@@ -181,15 +181,32 @@ static int do_ifconfig(struct espconn *conn, int argc, const char* argv[])
 {
 	struct ip_info sta_info, ap_info;
 	int mode = wifi_get_opmode();
+	char *buf = NULL;
 	wifi_get_ip_info(STATION_IF, &sta_info);
+	mconcat(&buf, "sta ip ");
+	madd_ip(&buf, sta_info.ip.addr);
+	mconcat(&buf, " mask ");
+	madd_ip(&buf, sta_info.netmask.addr);
+	mconcat(&buf, " gw ");
+	madd_ip(&buf, sta_info.gw.addr);
+	mconcat(&buf, NL);
 	wifi_get_ip_info(SOFTAP_IF, &ap_info);
-	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+	mconcat(&buf, "ap ip ");
+	madd_ip(&buf, ap_info.ip.addr);
+	mconcat(&buf, " mask ");
+	madd_ip(&buf, ap_info.netmask.addr);
+	mconcat(&buf, " gw ");
+	madd_ip(&buf, ap_info.gw.addr);
+	mconcat(&buf, NL);
+	mconcat(&buf, MSG_OK);
+	espconn_sent(conn, buf, strlen(buf));
+	os_free(buf);
 	return 0;
 }
 
 static int do_help(struct espconn *conn, int argc, const char* argv[])
 {
-	config_commands_t *p = config_commands;
+	const config_commands_t *p = config_commands;
 	char *buf = NULL;
 	while(p->command) {
 		buf = mconcat(&buf, p->command);

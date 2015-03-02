@@ -6,6 +6,7 @@
 #include "driver/uart.h"
 #include <mem.h>
 #include <gpio.h>
+#include "mmem.h"
 
 #define TICK_TIME 100
 #define TICK_TIMEOUT 10000
@@ -18,8 +19,9 @@
 
 
 static ETSTimer delayTimer;
-static int buflen = 0;
-static char *bufptr = NULL;
+static int fsize = -1;
+static int fpos_start = -1;
+static int fcur_pos = -1;
 
 int stk_tick = 0;
 int stk_stage = 0;
@@ -41,12 +43,7 @@ static int in_sync(char fb, char lb)
 static void stop_ticking()
 {
 	os_timer_disarm(&delayTimer);
-	if(bufptr) {
-		os_printf("free bufptr\n");
-		os_free(bufptr);
-	}
-	bufptr = NULL;
-	buflen = 0;
+	fpos_start = fcur_pos = fsize = -1;
 	uart0_lock = 0;
 }
 
@@ -55,16 +52,20 @@ static void stop_ticking()
 
 static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 {
-	int i, j, vals[VALS_COUNT], size;
+	int i, j, vals[VALS_COUNT], size, fpos = -1;
 	static int sync_cnt;
-	static int address = 0, bufpos;
-	char ok, insync, laddress, haddress, *bp, snum[3];
+	static int address = 0;
+	char ok, insync, laddress, haddress, snum[3], *line, *p;
 	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
 		os_printf(stk_error_descr = "stk timeout...\n");
 		stk_error = 1;
 	} else {
+		if(fcur_pos >= 0) {
+			fpos = ff_tell();
+			ff_seek(fcur_pos);
+		}
 		switch(stk_stage) {
 			case 0:
 				uart0_clean_chars();
@@ -130,7 +131,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					if(in_sync(insync, ok)) {
 						os_printf("bootloader version %d.%d\n", stk_major, stk_minor);
 						os_printf("entering prog mode\n");
-						bufpos = 0;
+						fcur_pos = fpos_start;
 						uart0_tx_one_char(0x50);
 						uart0_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
@@ -176,19 +177,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				laddress = address & 0xFF;
 				haddress = address >> 8 & 0xff;
 				os_printf("set page addr: %4X\n", address);
-				// skip two lines
-/*				i = 0;
-				while(bufpos < buflen) {
-					while(bufpos < buflen && (bufptr[bufpos] == '\x0a' || bufptr[bufpos] == '\x0d')) {
-						bufpos++;
-						i += bufptr[bufpos] == '\x0a';
-					}
-					if(i>1) {
-						break;
-					}
-					bufpos++;
-				}
-*/				address += PAGE_SIZE;
 				uart0_tx_one_char(0x55); //STK_LOAD_ADDRESS
 				uart0_tx_one_char(laddress);
 				uart0_tx_one_char(haddress);
@@ -204,34 +192,29 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						os_printf("sending program page <=%d bytes\n", PAGE_SIZE);
 						memset(vals, 0, sizeof(vals));
 						size = 0;
-						for(j=0; j<8; j++) {
+						for(j = 0; j < 8 && ff_tell() - fpos_start < fsize; j++) {
 							// process single line
-							// skip till ':'
-							while(bufpos < buflen-1) {
-								if(bufptr[bufpos++] == ':') {
-									break;
+							p = line = ff_mread_str();
+							if(line && line[0]) {
+//								os_printf("line='%s'\n", line);
+								// skip 9 byte of : and address
+								p += 9;
+								for(i=0; i<16; i++) {
+									if(*p == 0) {
+										// premature end of line
+										// the last byte is not needed
+										size--;
+//										os_printf("premature end of line\n");
+										break;
+									}
+									snum[0] = p[0];
+									snum[1] = p[1];
+									snum[2] = 0;
+									vals[size++] = (int)strtol(snum, NULL, 16);
+									os_printf("j=%d, i=%d, size=%d, b=%2X (%s), ftell=%d, fsize=%d\n", j, i, size, vals[size-1], snum, ff_tell()-fpos_start, fsize);
+									p += 2;
 								}
-							}
-							// skip 8 byte of address
-							bufpos += 8;
-							for(i=0; i<16; i++) {
-								if(bufpos >= buflen) {
-									// if no more buffer
-									break;
-								}
-								bp = bufptr + bufpos;
-								if(*bp == '\x0a' || *bp == '\x0d') {
-									// premature end of line
-									// the last byte is not needed
-									size--;
-									break;
-								}
-								snum[0] = bp[0];
-								snum[1] = bp[1];
-								snum[2] = 0;
-								vals[size++] = (int)strtol(snum, NULL, 16);
-								os_printf("j=%d, i=%d, size=%d, b=%2X (%s)\n", j, i, size, vals[size-1], snum);
-								bufpos += 2;
+								mfree(&line);
 							}
 						}
 						uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
@@ -243,8 +226,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 							uart0_tx_one_char(vals[j]);
 						}
 						uart0_tx_one_char(0x20); // SYNC_CRC_EOP
-						if(bufpos >= buflen) {
-							// end of buffer - stop/go to the next stage
+						address += size;
+						if(ff_tell() - fpos_start >= fsize) {
+							// end of file - stop/go to the next stage
 							stk_stage = 9;
 						} else {
 							// wait for sync then next block
@@ -298,6 +282,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 		}
+		if(fpos >= 0) {
+			fcur_pos = ff_tell();
+			ff_seek(fpos);
+		}
 	}
 	if(stk_error) {
 		os_printf("Error occured\n");
@@ -313,18 +301,11 @@ void ICACHE_FLASH_ATTR reset_arduino()
 	GPIO_OUTPUT_SET(5, 1);
 }
 
-void program(int size, char *buf)
+void program(int size, int pos_start)
 {
 	os_timer_disarm(&delayTimer);
-	if(bufptr != NULL) {
-		os_printf("free bufptr\n");
-		// clean old buffer
-		os_free(bufptr);
-	}
-	os_printf("malloc bufptr\n");
-	bufptr = os_malloc(size);
-	os_memcpy(bufptr, buf, size);
-	buflen = size;
+	fpos_start = pos_start;
+	fsize = size;
 	stk_stage = 0;
 	stk_tick = 0;
 	stk_error = 0;

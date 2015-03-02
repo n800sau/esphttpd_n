@@ -15,7 +15,8 @@ Cgi/template routines for the /wifi url.
 #include <string.h>
 #include <osapi.h>
 #include "user_interface.h"
-#include "mem.h"
+#include <mem.h>
+#include "mmem.h"
 #include "httpd.h"
 #include "cgi.h"
 #include "io.h"
@@ -178,8 +179,7 @@ static void ICACHE_FLASH_ATTR reassTimerCb(void *arg) {
 //This cgi uses the routines above to connect to a specific access point with the
 //given ESSID using the given password.
 int ICACHE_FLASH_ATTR cgiWiFiConnect(HttpdConnData *connData) {
-	char essid[128];
-	char passwd[128];
+	char essid[128], passwd[128], *line;
 	static ETSTimer reassTimer;
 	
 	if (connData->conn==NULL) {
@@ -187,8 +187,11 @@ int ICACHE_FLASH_ATTR cgiWiFiConnect(HttpdConnData *connData) {
 		return HTTPD_CGI_DONE;
 	}
 	
-	httpdFindArg(connData->postBuff, "essid", essid, sizeof(essid));
-	httpdFindArg(connData->postBuff, "passwd", passwd, sizeof(passwd));
+	ff_reset();
+	line = ff_mread_str();
+	httpdFindArg(line, "essid", essid, sizeof(essid));
+	httpdFindArg(line, "passwd", passwd, sizeof(passwd));
+	mfree(&line);
 
 	os_strncpy((char*)stconf.ssid, essid, 32);
 	os_strncpy((char*)stconf.password, passwd, 64);

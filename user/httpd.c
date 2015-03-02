@@ -16,7 +16,8 @@ Esp8266 http server - core routines
 #include "c_types.h"
 #include "user_interface.h"
 #include "espconn.h"
-#include "mem.h"
+#include <mem.h>
+#include "mmem.h"
 #include "osapi.h"
 
 #include "espconn.h"
@@ -29,8 +30,7 @@ Esp8266 http server - core routines
 #define MAX_HEAD_LEN 1024
 //Max amount of connections
 #define MAX_CONN 8
-//Max post buffer len
-#define MAX_POST 30000
+
 //Max send buffer len
 #define MAX_SENDBUFF_LEN 2048
 
@@ -100,11 +100,6 @@ static HttpdConnData ICACHE_FLASH_ATTR *httpdFindConnData(void *arg) {
 
 //Retires a connection for re-use
 static void ICACHE_FLASH_ATTR httpdRetireConn(HttpdConnData *conn) {
-	if (conn->postBuff != NULL) {
-		os_printf("free postBuff\n");
-		os_free(conn->postBuff);
-	}
-	conn->postBuff = NULL;
 	conn->cgi = NULL;
 	conn->conn = NULL;
 }
@@ -152,7 +147,7 @@ int httpdUrlDecode(char *val, int valLen, char *ret, int retLen) {
 //returned string will be urldecoded already.
 int ICACHE_FLASH_ATTR httpdFindArg(char *line, char *arg, char *buff, int buffLen) {
 	char *p, *e;
-	if (line==NULL) return 0;
+	if (line == NULL) return 0;
 	p=line;
 	while(p!=NULL && *p!='\n' && *p!='\r' && *p!=0) {
 		os_printf("findArg: %s in %s\n", arg, p);
@@ -170,44 +165,58 @@ int ICACHE_FLASH_ATTR httpdFindArg(char *line, char *arg, char *buff, int buffLe
 	return -1; //not found
 }
 
-int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *postbuf, int postlen, char *boundary, char *argname, char **argptr)
+int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *boundary, char *argname, int *pos_start, int *pos_end)
 {
-	char *p, *e;
+	char *line, *e, *p;
 	int argsize = 0;
-	if (postbuf==NULL) return 0;
-	p=postbuf;
-	while(p!= NULL && (p - postbuf) < postlen) {
-		if(os_strncmp(p, "Content-Disposition:", 20) == 0) {
-			p += 20;
-			e=(char*)os_strstr(p, "name=\"");
+	const char *cdisp = "Content-Disposition:";
+	const char *cname = "name=\"";
+	ff_reset();
+	while((line = ff_mread_str()) != NULL) {
+		p = line;
+//		os_printf("line=%s\n", line);
+		if(os_strncmp(p, cdisp, sizeof(cdisp) - 1) == 0) {
+//			os_printf("found %s\n", cdisp);
+			p += strlen(cdisp);
+			e=(char*)os_strstr(p, cname);
 			if(e) {
-				e+=6;
-//				os_printf("line start with %s\n", e);
+//				os_printf("found %s\n", cname);
+				e += strlen(cname);
+//				os_printf("arg start with %s\n", e);
 				if(os_strncmp(e, argname, os_strlen(argname)) == 0) {
-					os_printf("found %s\n", argname);
+//					os_printf("found %s\n", argname);
 					// find empty line
-					//skip line
-					p=(char*)os_strstr(p, "\x0d\x0a\x0d\x0a");
-					if(p) {
-						p += 4;
-						*argptr = p;
-						// find end of value
-						e=(char*)os_strstr(p, boundary);
-						if(e) {
-							argsize = e - p;
-						} else {
-							argsize = postlen - (p - postbuf);
+					do {
+						mfree(&line);
+						line = ff_mread_str();
+						if(line == NULL) {
+							return -1;
 						}
-						return argsize;
+					} while(line[0] != 0);
+					// skip empty line
+					mfree(&line);
+					*pos_end = *pos_start = ff_tell();
+					line = ff_mread_str();
+					if(line == NULL) {
+						return -1;
 					}
+					// find end of value
+					while(!os_strstr(line, boundary)) {
+						*pos_end = ff_tell();
+						mfree(&line);
+						line = ff_mread_str();
+						if(line == NULL) {
+							return -1;
+						}
+					}
+//					os_printf("start=%d, end=%d\n", *pos_start, *pos_end);
+					mfree(&line);
+					argsize = *pos_end - *pos_start;
+					return argsize;
 				}
 			}
 		}
-		// skip line
-		p=(char*)os_strstr(p, "\x0a");
-		if(p) p++;
 	}
-	os_printf("%s not found\n", argname);
 	return -1; //not found
 }
 
@@ -407,15 +416,14 @@ static void ICACHE_FLASH_ATTR httpdParseHeader(char *h, HttpdConnData *conn) {
 		//Get POST data length
 		conn->postLen=atoi(h+i+1);
 		//Clamp if too big. Hmm, maybe we should error out instead?
-		if (conn->postLen>MAX_POST) {
-			os_printf("Error. Post file size is %d. Maximum is %d bytes.\n", conn->postLen, MAX_POST);
+		if (conn->postLen>FF_SIZE) {
+			os_printf("Error. Post file size is %d. Maximum is %d bytes.\n", conn->postLen, FF_SIZE);
 			conn->postLen=0;
 			return;
 		} else {
-			//Alloc the memory.
-			os_printf("malloc postBuf (%d bytes)\n", conn->postLen);
-			conn->postBuff = os_malloc(conn->postLen+1);
+			// start writing post to flash
 			conn->priv->postPos=0;
+			ff_erase();
 		}
 	}
 }
@@ -423,7 +431,7 @@ static void ICACHE_FLASH_ATTR httpdParseHeader(char *h, HttpdConnData *conn) {
 
 //Callback called when there's data available on a socket.
 static void ICACHE_FLASH_ATTR httpdRecvCb(void *arg, char *data, unsigned short len) {
-	int x;
+	int x, sz;
 	char *p, *e;
 	char sendBuff[MAX_SENDBUFF_LEN];
 	HttpdConnData *conn=httpdFindConnData(arg);
@@ -459,13 +467,22 @@ static void ICACHE_FLASH_ATTR httpdRecvCb(void *arg, char *data, unsigned short 
 				}
 			}
 		} else if (conn->priv->postPos!=-1 && conn->postLen>0 && conn->priv->postPos <= conn->postLen) {
-			//This byte is a POST byte.
-			conn->postBuff[conn->priv->postPos++]=data[x];
+			sz = len - x;
+			if(conn->priv->postPos + sz > conn->postLen) {
+				sz = conn->postLen - conn->priv->postPos;
+			}
+			ff_write_bytes(data+x, sz);
+			conn->priv->postPos += sz;
+			x = len;
 			if (conn->priv->postPos>=conn->postLen) {
+//				ff_reset();
+//				while((p = ff_mread_str()) != NULL) {
+//				os_printf("read %s\n", p);
+//					mfree(&p);
+//				}
+//				os_printf("exit http\n");
 				//Received post stuff.
-				conn->postBuff[conn->priv->postPos]=0; //zero-terminate
 				conn->priv->postPos=-1;
-//				os_printf("Post data: %s\n", conn->postBuff);
 				//Send the response.
 				httpdSendResp(conn);
 			}
@@ -523,7 +540,6 @@ static void ICACHE_FLASH_ATTR httpdConnectCb(void *arg) {
 	connData[i].priv=&connPrivData[i];
 	connData[i].conn=conn;
 	connData[i].priv->headPos=0;
-	connData[i].postBuff = NULL;
 	connData[i].priv->postPos=0;
 	connData[i].postLen=-1;
 	connData[i].boundary[0]=0;

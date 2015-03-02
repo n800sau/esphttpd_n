@@ -29,7 +29,6 @@ struct HttpdConnData {
 	cgiSendCallback cgi;
 	char boundary[80];
 	int postLen;
-	char *postBuff;
 };
 
 //A struct describing an url. This is the main struct that's used to send different URL requests to
@@ -44,7 +43,7 @@ int ICACHE_FLASH_ATTR cgiRedirect(HttpdConnData *connData);
 void ICACHE_FLASH_ATTR httpdRedirect(HttpdConnData *conn, char *newUrl);
 int httpdUrlDecode(char *val, int valLen, char *ret, int retLen);
 int ICACHE_FLASH_ATTR httpdFindArg(char *line, char *arg, char *buff, int buffLen);
-int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *postbuf, int postlen, char *boundary, char *argname, char **argptr);
+int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *boundary, char *argname, int *pos_start, int *pos_end);
 void ICACHE_FLASH_ATTR httpdInit(HttpdBuiltInUrl *fixedUrls, int port);
 const char *httpdGetMimetype(char *url);
 void ICACHE_FLASH_ATTR httpdStartResponse(HttpdConnData *conn, int code);

@@ -17,13 +17,14 @@ flash as a binary. Also handles the hit counter on the main page.
 #include <osapi.h>
 #include "user_interface.h"
 #include <driver/uart.h>
-#include "mem.h"
+#include <mem.h>
 #include "httpd.h"
 #include "cgi.h"
 #include "io.h"
 #include "base64.h"
 #include <ip_addr.h>
 #include "espmissingincludes.h"
+#include "mmem.h"
 
 
 //cause I can't be bothered to write an ioGetLed()
@@ -32,14 +33,17 @@ static char currLedState=0;
 //Cgi that turns the LED on or off according to the 'led' param in the POST data
 int ICACHE_FLASH_ATTR cgiLed(HttpdConnData *connData) {
 	int len;
-	char buff[1024];
+	char buff[1024], *line;
 	
 	if (connData->conn==NULL) {
 		//Connection aborted. Clean up.
 		return HTTPD_CGI_DONE;
 	}
 
-	len=httpdFindArg(connData->postBuff, "led", buff, sizeof(buff));
+	ff_reset();
+	line = ff_mread_str();
+	len = httpdFindArg(line, "led", buff, sizeof(buff));
+	mfree(&line);
 	if (len!=0) {
 		currLedState=atoi(buff);
 		ioLed(currLedState);
@@ -107,7 +111,7 @@ int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
 int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 {
 	char *p;
-	int sz, baud;
+	int sz, baud, pos_start, pos_end;
 
 	if(connData->postLen <= 0) {
 		os_printf("Error post len=%d\n", connData->postLen);
@@ -120,33 +124,45 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 	}
 
 	os_printf("boundary=%s\n", connData->boundary);
-	sz = httpdFindMultipartArg(connData->postBuff, connData->postLen, connData->boundary, "baud", &p);
-	baud = atoi(p);
-	os_printf("baud=%d\n", baud);
-	sz = httpdFindMultipartArg(connData->postBuff, connData->postLen, connData->boundary, "datafile", &p);
-	os_printf("file size=%d\n", sz);
-//	os_printf("file:\n%s\n", p);
-	switch(baud) {
-		case 19200:
-			baud = BIT_RATE_19200;
-			break;
-		case 38400:
-			baud = BIT_RATE_38400;
-			break;
-		case 57600:
-			baud = BIT_RATE_57600;
-			break;
-		case 115200:
-			baud = BIT_RATE_115200;
-			break;
-		default:
-			baud = 0;
-			break;
+	sz = httpdFindMultipartArg(connData->boundary, "baud", &pos_start, &pos_end);
+	if( sz < 0 ) {
+		os_printf("\"baud\" not found\n");
+	} else {
+		ff_seek(pos_start);
+		p = ff_mread_alloc(sz+1);
+		p[sz] = 0;
+		baud = atoi(p);
+		mfree(&p);
+		os_printf("baud=%d\n", baud);
+		switch(baud) {
+			case 19200:
+				baud = BIT_RATE_19200;
+				break;
+			case 38400:
+				baud = BIT_RATE_38400;
+				break;
+			case 57600:
+				baud = BIT_RATE_57600;
+				break;
+			case 115200:
+				baud = BIT_RATE_115200;
+				break;
+			default:
+				baud = 0;
+				break;
+		}
+		if(baud) {
+			uart0_change_rate(baud);
+		}
 	}
-	if(baud)
-		uart0_change_rate(baud);
-	program(sz, p);
-	httpdRedirect(connData, "/programming.tpl");
+	sz = httpdFindMultipartArg(connData->boundary, "datafile", &pos_start, &pos_end);
+	if( sz < 0 ) {
+		os_printf("\"datafile\" not found\n");
+	} else {
+		os_printf("file size=%d\n", sz);
+		program(sz, pos_start);
+		httpdRedirect(connData, "/programming.tpl");
+	}
 	return HTTPD_CGI_DONE;
 }
 

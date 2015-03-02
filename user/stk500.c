@@ -52,7 +52,7 @@ static void stop_ticking()
 
 static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 {
-	int i, j, vals[VALS_COUNT], size, fpos = -1, valsize, lineaddr, rtype ,crc, val;
+	int i, j, vals[VALS_COUNT], size, fpos = -1, valsize, lineaddr, rtype ,crc, val, save_pos;
 	static int sync_cnt;
 	static int address = 0;
 	char ok, insync, laddress, haddress, snum[5], *line, *p;
@@ -174,15 +174,31 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 6:
-				laddress = address & 0xFF;
-				haddress = address >> 8 & 0xff;
-				os_printf("set page addr: %4X\n", address);
-				uart0_tx_one_char(0x55); //STK_LOAD_ADDRESS
-				uart0_tx_one_char(laddress);
-				uart0_tx_one_char(haddress);
-				uart0_tx_one_char(0x20); // SYNC_CRC_EOP
-				stk_stage = 7;
-				stk_tick = 0;
+				save_pos = ff_tell();
+				p = line = ff_mread_str();
+				ff_seek(save_pos);
+				if(line) {
+					snum[0] = p[3];
+					snum[1] = p[4];
+					snum[2] = p[5];
+					snum[3] = p[6];
+					snum[4] = 0;
+					address = (int)strtol(snum, NULL, 16);
+					laddress = address & 0xFF;
+					haddress = address >> 8 & 0xff;
+					os_printf("set page addr: %4X\n", address);
+					uart0_tx_one_char(0x55); //STK_LOAD_ADDRESS
+					os_printf("send laddr: %2X\n", laddress);
+					uart0_tx_one_char(laddress);
+					os_printf("send haddr: %2X\n", haddress);
+					uart0_tx_one_char(haddress);
+					uart0_tx_one_char(0x20); // SYNC_CRC_EOP
+					stk_stage = 7;
+					stk_tick = 0;
+					mfree(&line);
+				} else {
+					stk_error = 1;
+				}
 				break;
 			case 7:
 				if(uart0_count_chars() >= 2) {
@@ -257,7 +273,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 								uart0_tx_one_char(vals[j]);
 							}
 							uart0_tx_one_char(0x20); // SYNC_CRC_EOP
-							address += size;
 							if(ff_tell() - fpos_start >= fsize || rtype == 1) {
 								// end of file - stop/go to the next stage
 								stk_stage = 9;

@@ -52,10 +52,10 @@ static void stop_ticking()
 
 static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 {
-	int i, j, vals[VALS_COUNT], size, fpos = -1;
+	int i, j, vals[VALS_COUNT], size, fpos = -1, valsize, lineaddr, rtype ,crc, val;
 	static int sync_cnt;
 	static int address = 0;
-	char ok, insync, laddress, haddress, snum[3], *line, *p;
+	char ok, insync, laddress, haddress, snum[5], *line, *p;
 	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
@@ -192,49 +192,81 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						os_printf("sending program page <=%d bytes\n", PAGE_SIZE);
 						memset(vals, 0, sizeof(vals));
 						size = 0;
-						for(j = 0; j < 8 && ff_tell() - fpos_start < fsize; j++) {
+						rtype = 0;
+						for(j = 0; j < 8 && rtype!= 1 && ff_tell() - fpos_start < fsize && !stk_error; j++) {
 							// process single line
 							p = line = ff_mread_str();
 							if(line && line[0]) {
+								crc = 0;
 //								os_printf("line='%s'\n", line);
-								// skip 9 byte of : and address
-								p += 9;
-								for(i=0; i<16; i++) {
-									if(*p == 0) {
-										// premature end of line
-										// the last byte is not needed
-										size--;
-//										os_printf("premature end of line\n");
-										break;
+								snum[0] = p[1];
+								snum[1] = p[2];
+								snum[2] = 0;
+								valsize = (int)strtol(snum, NULL, 16);
+								crc += valsize;
+								snum[0] = p[3];
+								snum[1] = p[4];
+								snum[2] = p[5];
+								snum[3] = p[6];
+								snum[4] = 0;
+								lineaddr = (int)strtol(snum, NULL, 16);
+								crc += lineaddr & 0xff;
+								crc += (lineaddr >> 8) & 0xff;
+								os_printf("lineaddr=0x%4.4X\n", lineaddr);
+								snum[0] = p[7];
+								snum[1] = p[8];
+								snum[2] = 0;
+								rtype = (int)strtol(snum, NULL, 16);
+								crc += rtype;
+								if(rtype == 0) { // record type - (0-data, 1-end)
+									// skip 9 byte of : and address etc
+									p += 9;
+									for(i=0; i<valsize; i++) {
+										snum[0] = p[0];
+										snum[1] = p[1];
+										snum[2] = 0;
+										val = (int)strtol(snum, NULL, 16);
+										crc += val;
+										os_printf("j=%d, i=%d, size=%d, b=%2X (%s), ftell=%d, fsize=%d\n", j, i, size, val, snum, ff_tell()-fpos_start, fsize);
+										vals[size++] = val;
+										p += 2;
 									}
+									// check crc
 									snum[0] = p[0];
 									snum[1] = p[1];
 									snum[2] = 0;
-									vals[size++] = (int)strtol(snum, NULL, 16);
-									os_printf("j=%d, i=%d, size=%d, b=%2X (%s), ftell=%d, fsize=%d\n", j, i, size, vals[size-1], snum, ff_tell()-fpos_start, fsize);
-									p += 2;
+									val = (int)strtol(snum, NULL, 16);
+									crc = ((crc ^ 0xff) + 1) & 0xff;
+									if(crc != val) {
+										os_printf("CRC error: crc=%X vs val=%X\n", crc, val);
+										stk_error = 1;
+									}
 								}
 								mfree(&line);
+							} else {
+								break;
 							}
 						}
-						uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
-						uart0_tx_one_char(0); // page size
-						uart0_tx_one_char(size); // page size
-						uart0_tx_one_char(0x46); // flash memory, 'F'
-						os_printf("size=%d\n", size);
-						for(j=0; j<size; j++) {
-							uart0_tx_one_char(vals[j]);
+						if(!stk_error) {
+							uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
+							uart0_tx_one_char(0); // page size
+							uart0_tx_one_char(size); // page size
+							uart0_tx_one_char(0x46); // flash memory, 'F'
+							os_printf("size=%d\n", size);
+							for(j=0; j<size; j++) {
+								uart0_tx_one_char(vals[j]);
+							}
+							uart0_tx_one_char(0x20); // SYNC_CRC_EOP
+							address += size;
+							if(ff_tell() - fpos_start >= fsize || rtype == 1) {
+								// end of file - stop/go to the next stage
+								stk_stage = 9;
+							} else {
+								// wait for sync then next block
+								stk_stage = 8;
+							}
+							stk_tick = 0;
 						}
-						uart0_tx_one_char(0x20); // SYNC_CRC_EOP
-						address += size;
-						if(ff_tell() - fpos_start >= fsize) {
-							// end of file - stop/go to the next stage
-							stk_stage = 9;
-						} else {
-							// wait for sync then next block
-							stk_stage = 8;
-						}
-						stk_tick = 0;
 					} else {
 						stk_error = 1;
 					}

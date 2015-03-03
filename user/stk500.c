@@ -48,8 +48,8 @@ static void stop_ticking()
 	uart0_lock = 0;
 }
 
-#define PAGE_SIZE (8*8)
-#define VALS_COUNT (PAGE_SIZE * 2 + 8)
+#define PAGE_SIZE (8*16)
+#define VALS_COUNT (PAGE_SIZE + 8)
 
 static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 {
@@ -66,6 +66,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 		if(fcur_pos >= 0) {
 			fpos = ff_tell();
 			ff_seek(fcur_pos);
+//			os_printf("fpos=%d, fcur_pos=%d\n", fpos, fcur_pos);
 		}
 		switch(stk_stage) {
 			case 0:
@@ -132,7 +133,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					if(in_sync(insync, ok)) {
 						os_printf("bootloader version %d.%d\n", stk_major, stk_minor);
 						os_printf("entering prog mode\n");
-						fcur_pos = fpos_start;
+						ff_seek(fpos_start);
 						uart0_tx_one_char(0x50);
 						uart0_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
@@ -206,13 +207,14 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					insync = uart0_get_char();
 					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
-						os_printf("sending program page <=%d bytes\n", PAGE_SIZE);
 						memset(vals, 0, sizeof(vals));
 						size = 0;
 						rtype = 0;
+						os_printf("pos=%d, size=%d\n", ff_tell(), size);
 						for(j = 0; j < 8 && rtype!= 1 && ff_tell() - fpos_start < fsize && !stk_error; j++) {
 							// process single line
 							p = line = ff_mread_str();
+//							os_printf("Read line %s\n", line);
 							if(line && line[0]) {
 								crc = 0;
 //								os_printf("line='%s'\n", line);

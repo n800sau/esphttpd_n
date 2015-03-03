@@ -35,7 +35,8 @@ static int in_sync(char fb, char lb)
 	if(rs) {
 		os_printf(stk_error_descr="in sync\n");
 	} else {
-		os_printf(stk_error_descr="OUT of sync: %d %d\n", fb, lb);
+		stk_error_descr="OUT of sync";
+		os_printf("%s: %d %d\n", stk_error_descr, fb, lb);
 	}
 	return rs;
 }
@@ -344,7 +345,7 @@ void ICACHE_FLASH_ATTR reset_arduino()
 {
 	// reset on gpio5
 	GPIO_OUTPUT_SET(5, 0);
-	os_delay_us(300);
+	os_delay_us(600);
 	GPIO_OUTPUT_SET(5, 1);
 }
 

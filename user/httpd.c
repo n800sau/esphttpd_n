@@ -174,7 +174,7 @@ int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *boundary, char *argname, int *
 	ff_reset();
 	while((line = ff_mread_str()) != NULL) {
 		p = line;
-//		os_printf("line=%s\n", line);
+//		os_printf("line=%s, pos=%d\n", line, ff_tell());
 		if(os_strncmp(p, cdisp, sizeof(cdisp) - 1) == 0) {
 //			os_printf("found %s\n", cdisp);
 			p += strlen(cdisp);
@@ -194,8 +194,8 @@ int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *boundary, char *argname, int *
 						}
 					} while(line[0] != 0);
 					// skip empty line
-					mfree(&line);
 					*pos_end = *pos_start = ff_tell();
+					mfree(&line);
 					line = ff_mread_str();
 					if(line == NULL) {
 						return -1;
@@ -216,6 +216,7 @@ int ICACHE_FLASH_ATTR httpdFindMultipartArg(char *boundary, char *argname, int *
 				}
 			}
 		}
+		mfree(&line);
 	}
 	return -1; //not found
 }

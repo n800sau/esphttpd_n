@@ -25,7 +25,7 @@ flash as a binary. Also handles the hit counter on the main page.
 #include <ip_addr.h>
 #include "espmissingincludes.h"
 #include "mmem.h"
-
+#include <ets_sys.h>
 
 //cause I can't be bothered to write an ioGetLed()
 static char currLedState=0;
@@ -113,6 +113,8 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 	char *p;
 	int sz, baud, pos_start, pos_end;
 
+	ets_wdt_disable();
+
 	if(connData->postLen <= 0) {
 		os_printf("Error post len=%d\n", connData->postLen);
 		return HTTPD_CGI_ERROR;
@@ -123,7 +125,7 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 		return HTTPD_CGI_DONE;
 	}
 
-	os_printf("boundary=%s\n", connData->boundary);
+//	os_printf("boundary=%s\n", connData->boundary);
 	sz = httpdFindMultipartArg(connData->boundary, "baud", &pos_start, &pos_end);
 	if( sz < 0 ) {
 		os_printf("\"baud\" not found\n");
@@ -163,6 +165,8 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 		program(sz, pos_start);
 		httpdRedirect(connData, "/programming.tpl");
 	}
+	wdt_feed();
+	ets_wdt_enable();
 	return HTTPD_CGI_DONE;
 }
 

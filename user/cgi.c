@@ -158,6 +158,8 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 		}
 	}
 	sz = httpdFindMultipartArg(connData->boundary, "datafile", &pos_start, &pos_end);
+	wdt_feed();
+	ets_wdt_enable();
 	if( sz < 0 ) {
 		os_printf("\"datafile\" not found\n");
 	} else {
@@ -165,8 +167,6 @@ int ICACHE_FLASH_ATTR cgiProgram(HttpdConnData *connData)
 		program(sz, pos_start);
 		httpdRedirect(connData, "/programming.tpl");
 	}
-	wdt_feed();
-	ets_wdt_enable();
 	return HTTPD_CGI_DONE;
 }
 

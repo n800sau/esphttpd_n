@@ -185,7 +185,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					snum[2] = p[5];
 					snum[3] = p[6];
 					snum[4] = 0;
-					address = (int)strtol(snum, NULL, 16);
+					address = strtol(snum, NULL, 16) >> 1;
 					laddress = address & 0xFF;
 					haddress = address >> 8 & 0xff;
 					os_printf("set page addr: %4X\n", address);
@@ -346,9 +346,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 void ICACHE_FLASH_ATTR reset_arduino()
 {
 	// reset on gpio5
-	GPIO_OUTPUT_SET(5, 0);
-	os_delay_us(600);
-	GPIO_OUTPUT_SET(5, 1);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
+	os_delay_us(300000);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
 }
 
 void program(int size, int pos_start)
@@ -379,7 +379,7 @@ void ICACHE_FLASH_ATTR init_reset_pin()
 	//enable pull up R
 	PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO5_U);
 
-	GPIO_OUTPUT_SET(5, 1);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
 }
 
 void init_stk500()

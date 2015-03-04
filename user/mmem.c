@@ -38,9 +38,10 @@ char *madd_ip(char **bufptr, uint32_t ip)
 	char buf[5];
 	int i;
 	for(i=0; i<4; i++) {
-		os_sprintf(buf, "%d", (uint8_t)(ip & 0xff000000 >> 24));
+		if(i > 0) mconcat(bufptr, ".");
+		os_sprintf(buf, "%d", (uint8_t)(ip & 0xff));
 		mconcat(bufptr, buf);
-		ip = ip << 8;
+		ip = ip >> 8;
 	}
 	return *bufptr;
 }

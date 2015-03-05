@@ -264,8 +264,6 @@ void ICACHE_FLASH_ATTR uart_init(UartBautRate uart0_br, UartBautRate uart1_br)
 	uart_config(UART1);
 	ETS_UART_INTR_ENABLE();
 
-	// install uart1 putc callback
-	os_install_putc1((void *)uart1_write_char);
 	system_os_task(recvCharTaskCb, recvCharTaskPrio, recvCharTaskQueue, recvCharTaskQueueLen);
 }
 

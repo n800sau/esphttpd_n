@@ -1,0 +1,18 @@
+Included:
+
+httpd with ability to flash posted arduino firmware.hex files to connected to uart0 arduino
+
+telnet transparent to uart0 with some +++AT commands
+
+uart1 is used for debugging output
+
+list of AT commands:
+HELP - shows this list
+IFCONFIG - shows ip-s
+RESET - reset
+MODE - wifi mode
+STA - station info
+AP - access point info
+IORST - set gpio5 to 0 for some time then set back to 1
+
+

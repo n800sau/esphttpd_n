@@ -47,10 +47,10 @@ static void ICACHE_FLASH_ATTR serverRecvCb(void *arg, char *data, unsigned short
 		} else {
 			espconn_sent(conn->conn, LOCKED_STR, sizeof(LOCKED_STR)-1);
 		}
-		for(i=0; i<len; i++) {
-			os_printf(">> 0x%2X ", data[i]);
-		}
-		os_printf("\r\n");
+//		for(i=0; i<len; i++) {
+//			os_printf(">> 0x%2X ", data[i]);
+//		}
+//		os_printf("\r\n");
 		if( len == 2 && data[0] == 0x30 && data[1] == 0x20 && ! reset_sent ) {
 			reset_sent = true;
 		}

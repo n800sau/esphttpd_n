@@ -27,7 +27,7 @@ static serverConnData ICACHE_FLASH_ATTR *serverFindConnData(void *arg) {
 
 
 static void ICACHE_FLASH_ATTR serverSentCb(void *arg) {
-	os_printf("Sent CB\n");
+//	os_printf("Sent CB\n");
 //	serverConnData *conn=serverFindConnData(arg);
 //	if (conn==NULL) return;
 }
@@ -97,33 +97,46 @@ static void ICACHE_FLASH_ATTR serverConnectCb(void *arg) {
 
 static ETSTimer delayTimer;
 
-static void ICACHE_FLASH_ATTR read_uart0(void *arg)
+static void ICACHE_FLASH_ATTR read_uart(void *arg)
 {
 	static int last_lock = 0;
 	int i, j, n;
-	char buf[32];
+	char *buf;
 	if(uart0_lock == 0) {
 		last_lock = 0;
 		n = uart0_count_chars();
 		if(n > 0) {
-			if(n > sizeof(buf)) {
-				n = sizeof(buf);
-			}
+			buf = os_malloc(n+1);
 			for (i = 0; i < MAX_CONN; ++i) {
 				if (connData[i].conn) {
 					for(j=0; j<n; j++) {
 						buf[j] = uart0_get_char();
-						os_printf("[%2X] ", buf[j]);
+//						os_printf("[%2X] ", buf[j]);
 					}
 					espconn_sent(connData[i].conn, (uint8_t*)buf, n);
-					os_printf("\nSent %d bytes\n", n);
+//					os_printf("\nSent %d bytes\n", n);
 				}
 			}
-			
+			os_free(buf);
 		}
 	} else if(!last_lock) {
 		last_lock = uart0_lock;
-		os_printf("locked\n");
+//		os_printf("locked\n");
+	}
+	if(debug_mode) {
+		n = uart1_count_chars();
+		if(n > 0) {
+			buf = os_malloc(n+1);
+			for (i = 0; i < MAX_CONN; ++i) {
+				if (connData[i].conn) {
+					for(j=0; j<n; j++) {
+						buf[j] = uart1_get_char();
+					}
+					espconn_sent(connData[i].conn, (uint8_t*)buf, n);
+				}
+			}
+			os_free(buf);
+		}
 	}
 }
 
@@ -138,7 +151,7 @@ void ICACHE_FLASH_ATTR serverInit(int port) {
 	espconn_regist_time(&serverConn, SERVER_TIMEOUT, 0);
 
 	os_timer_disarm(&delayTimer);
-	os_timer_setfn(&delayTimer, read_uart0, NULL);
+	os_timer_setfn(&delayTimer, read_uart, NULL);
 	os_timer_arm(&delayTimer, 100, 1);
 
 }

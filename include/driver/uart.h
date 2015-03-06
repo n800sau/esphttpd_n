@@ -102,10 +102,17 @@ extern int uart0_lock;
 void uart_init(UartBautRate uart0_br, UartBautRate uart1_br);
 void ICACHE_FLASH_ATTR uart1_write_char(char c);
 void ICACHE_FLASH_ATTR uart0_change_rate(UartBautRate uart0_br);
+
 void ICACHE_FLASH_ATTR uart0_add_char(char c);
 char ICACHE_FLASH_ATTR uart0_get_char();
 int ICACHE_FLASH_ATTR uart0_count_chars();
 void ICACHE_FLASH_ATTR uart0_clean_chars();
+
+void ICACHE_FLASH_ATTR uart1_add_char(char c);
+char ICACHE_FLASH_ATTR uart1_get_char();
+int ICACHE_FLASH_ATTR uart1_count_chars();
+void ICACHE_FLASH_ATTR uart1_clean_chars();
+
 STATUS ICACHE_FLASH_ATTR uart0_tx_one_char(uint8 TxChar);
 void ICACHE_FLASH_ATTR uart0_tx_buffer(uint8 *buf, uint16 len);
 

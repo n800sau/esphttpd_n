@@ -21,6 +21,8 @@
 #define MAX_ARGS 12
 #define MSG_BUF_LEN 128
 
+int debug_mode = 0;
+
 typedef struct config_commands {
 	char *command;
 	void (*function)(p_espconn conn, uint8_t argc, char *argv[]);
@@ -177,6 +179,23 @@ static void io_reset(struct espconn *conn, uint8_t argc, char *argv[]) {
 	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
 }
 
+static void config_debug_mode(struct espconn *conn, uint8_t argc, char *argv[]) {
+	uint8_t mode;
+
+	if (argc == 0) {
+		char *buf = os_malloc(MSG_BUF_LEN);
+		os_sprintf(buf, "DEBUG MODE=%d\n", debug_mode);
+		mconcat(&buf, MSG_OK);
+		espconn_sent(conn, buf, strlen(buf));
+		os_free(buf);
+	} else if (argc != 1) {
+		espconn_sent(conn, MSG_ERROR, strlen(MSG_ERROR));
+	} else {
+		debug_mode = atoi(argv[1]);
+		espconn_sent(conn, (uint8_t*)MSG_OK, strlen(MSG_OK));
+	}
+}
+
 static int do_ifconfig(struct espconn *conn, int argc, const char* argv[])
 {
 	struct ip_info sta_info, ap_info;
@@ -228,6 +247,7 @@ const config_commands_t config_commands[] = {
 		{ "STA", &config_cmd_sta },
 		{ "AP", &config_cmd_ap },
 		{ "IORST", &io_reset },
+		{ "DEBUG", &config_debug_mode },
 		{ NULL, NULL }
 	};
 

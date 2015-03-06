@@ -26,30 +26,30 @@ LOCAL void uart0_rx_intr_handler(void *para);
 #define recvCharTaskPrio        0
 #define recvCharTaskQueueLen    64
 
-#define UART_BUF_SIZE 100
-static char uart_buf[UART_BUF_SIZE];
-static int buf_pos = 0;
+#define UART0_BUF_SIZE 512
+static char uart0_buf[UART0_BUF_SIZE];
+static int uart0_buf_pos = 0;
 
 int uart0_lock = 0;
 
 void ICACHE_FLASH_ATTR uart0_add_char(char c)
 {
-	uart_buf[buf_pos] = c;
-	buf_pos++;
-	if(buf_pos >= sizeof(uart_buf)) {
-		buf_pos = sizeof(uart_buf) - 1;
+	uart0_buf[uart0_buf_pos] = c;
+	uart0_buf_pos++;
+	if(uart0_buf_pos >= sizeof(uart0_buf)) {
+		uart0_buf_pos = sizeof(uart0_buf) - 1;
 		// forget the oldest
-		memmove(uart_buf, uart_buf+1, sizeof(uart_buf) - 1);
+		memmove(uart0_buf, uart0_buf+1, sizeof(uart0_buf) - 1);
 	}
 }
 
 char ICACHE_FLASH_ATTR uart0_get_char()
 {
 	char rs = -1;
-	if(buf_pos > 0) {
-		rs =  uart_buf[0];
-		memmove(uart_buf, uart_buf+1, sizeof(uart_buf) - 1);
-		buf_pos--;
+	if(uart0_buf_pos > 0) {
+		rs =  uart0_buf[0];
+		memmove(uart0_buf, uart0_buf+1, sizeof(uart0_buf) - 1);
+		uart0_buf_pos--;
 	}
 //	os_printf("get char : %2X\n", rs);
 	return rs;
@@ -57,12 +57,49 @@ char ICACHE_FLASH_ATTR uart0_get_char()
 
 int ICACHE_FLASH_ATTR uart0_count_chars()
 {
-	return buf_pos;
+	return uart0_buf_pos;
 }
 
 void ICACHE_FLASH_ATTR uart0_clean_chars()
 {
-	buf_pos = 0;
+	uart0_buf_pos = 0;
+}
+
+#define UART1_BUF_SIZE 512
+static char uart1_buf[UART1_BUF_SIZE];
+static int uart1_buf_pos = 0;
+
+void ICACHE_FLASH_ATTR uart1_add_char(char c)
+{
+	uart1_buf[uart1_buf_pos] = c;
+	uart1_buf_pos++;
+	if(uart1_buf_pos >= sizeof(uart1_buf)) {
+		uart1_buf_pos = sizeof(uart1_buf) - 1;
+		// forget the oldest
+		memmove(uart1_buf, uart1_buf+1, sizeof(uart1_buf) - 1);
+	}
+}
+
+char ICACHE_FLASH_ATTR uart1_get_char()
+{
+	char rs = -1;
+	if(uart1_buf_pos > 0) {
+		rs =  uart1_buf[0];
+		memmove(uart1_buf, uart1_buf+1, sizeof(uart1_buf) - 1);
+		uart1_buf_pos--;
+	}
+//	os_printf("get char : %2X\n", rs);
+	return rs;
+}
+
+int ICACHE_FLASH_ATTR uart1_count_chars()
+{
+	return uart1_buf_pos;
+}
+
+void ICACHE_FLASH_ATTR uart1_clean_chars()
+{
+	uart1_buf_pos = 0;
 }
 
 static os_event_t recvCharTaskQueue[recvCharTaskQueueLen];
@@ -179,11 +216,11 @@ LOCAL STATUS ICACHE_FLASH_ATTR uart1_tx_one_char(uint8 TxChar)
 *******************************************************************************/
 void ICACHE_FLASH_ATTR uart1_write_char(char c)
 {
+	uart1_add_char(c);
 	if (c == '\n') {
 		uart1_tx_one_char('\r');
 		uart1_tx_one_char('\n');
-	} else if (c == '\r') {
-	} else {
+	} else if (c != '\r') {
 		uart1_tx_one_char(c);
 	}
 }

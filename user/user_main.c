@@ -12,6 +12,7 @@
 
 #include "espmissingincludes.h"
 #include <user_interface.h>
+#include <mem.h>
 #include "ets_sys.h"
 #include "osapi.h"
 #include "httpd.h"
@@ -78,11 +79,6 @@ HttpdBuiltInUrl builtInUrls[]={
 	{NULL, NULL, NULL}
 };
 
-void ICACHE_FLASH_ATTR debug_write_char(char c)
-{
-	uart1_write_char(c);
-}
-
 //Main routine. Initialize uart, the I/O and the webserver and we're done.
 void user_init(void) {
 
@@ -94,7 +90,7 @@ void user_init(void) {
 	uart_init(BIT_RATE_57600, BIT_RATE_115200);
 
 	// install uart1 putc callback
-	os_install_putc1((void *)debug_write_char);
+	os_install_putc1((void *)uart1_write_char);
 
 	os_printf("\n\n\n\n\n\n\n\n");
     os_printf("SDK version:%s\n", system_get_sdk_version());

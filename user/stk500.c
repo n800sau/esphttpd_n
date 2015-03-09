@@ -51,16 +51,22 @@ static ICACHE_FLASH_ATTR void stop_ticking()
 
 static void ICACHE_FLASH_ATTR stopReset(void *arg)
 {
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+//	gpio_output_set(BIT12, 0, BIT12, 0);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
 	os_printf("Reset off\n");
 }
 
-void ICACHE_FLASH_ATTR reset_arduino()
+void reset_arduino()
 {
 	static ETSTimer resetTimer;
 	// reset on gpio5
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0);
+
+//	gpio_output_set(0, BIT12, BIT12, 0);
 	os_printf("Reset on\n");
+//	os_delay_us(500000);
+//	gpio_output_set(BIT12, 0, BIT12, 0);
+//	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
 	os_timer_setfn(&resetTimer, stopReset, NULL);
 	os_timer_arm(&resetTimer, 500, 0);
 }
@@ -167,7 +173,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	static int sync_cnt;
 	static int address = -1;
 	char ok, insync, laddress, haddress;
-//	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
+	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
 		os_printf(stk_error_descr = "stk timeout...\n");
@@ -407,21 +413,23 @@ void program(int size, int pos_start)
 	reset_arduino();
 	uart0_lock = STK500_LOCK;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
-	os_timer_arm(&delayTimer, 100, 1);
+	os_timer_arm(&delayTimer, 200, 1);
 }
 
 void ICACHE_FLASH_ATTR init_reset_pin()
 {
 	//set gpio5 as gpio pin
-	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12);
 
 	//disable pulldown
-	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_GPIO5_U);
+	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_MTDI_U);
 
 	//enable pull up R
-	PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO5_U);
+	PIN_PULLUP_DIS(PERIPHS_IO_MUX_MTDI_U);
 
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+	//1
+//	gpio_output_set(BIT12, 0, BIT12, 0);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
 }
 
 void init_stk500()

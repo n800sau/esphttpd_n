@@ -9,5 +9,6 @@ extern char stk_major, stk_minor, stk_signature[3];
 
 void init_stk500();
 void program(int size, int pos_start);
+void reset_arduino();
 
 #endif //_STK500_H

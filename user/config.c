@@ -9,6 +9,7 @@
 #include "osapi.h"
 #include "driver/uart.h"
 #include <gpio.h>
+#include "stk500.h"
 
 #include "config.h"
 
@@ -172,10 +173,7 @@ static void config_cmd_ap(struct espconn *conn, uint8_t argc, char *argv[]) {
 
 // spaces are not supported in the ssid or password
 static void io_reset(struct espconn *conn, uint8_t argc, char *argv[]) {
-	GPIO_OUTPUT_SET(5, 0);
-	os_printf("Reset 5\n");
-	os_delay_us(1000000L);
-	GPIO_OUTPUT_SET(5, 1);
+	reset_arduino();
 	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
 }
 

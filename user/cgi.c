@@ -187,13 +187,10 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 			os_strcpy(buff, "false");
 		}
 		if (os_strcmp(token, "prog_status")==0) {
-			os_sprintf(buff, "%s %d", (stk_error) ? "error occured at stage": "at stage", stk_stage);
+			os_sprintf(buff, "%s %d%%", (stk_error) ? "error occured at": "done", stk_percent);
 		}
 		if (os_strcmp(token, "status_msg")==0) {
 			os_sprintf(buff, "%s", (stk_error_descr) ? stk_error_descr: "");
-		}
-		if (os_strcmp(token, "tick")==0) {
-			os_sprintf(buff, "%d", stk_tick);
 		}
 	}
 	if (os_strcmp(token, "is_error")==0) {

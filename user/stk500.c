@@ -25,6 +25,7 @@ static int fcur_pos = -1;
 
 int stk_tick = 0;
 int stk_stage = 0;
+int stk_percent = 0;
 int stk_error = 0;
 const char *stk_error_descr = NULL;
 char stk_major, stk_minor, stk_signature[3];
@@ -33,7 +34,7 @@ static ICACHE_FLASH_ATTR int in_sync(char fb, char lb)
 {
 	int rs = fb == 0x14 && lb == 0x10;
 	if(rs) {
-		os_printf(stk_error_descr="in sync\n");
+//		os_printf("in sync\n");
 	} else {
 		stk_error_descr="OUT of sync";
 		os_printf("%s: %d %d\n", stk_error_descr, fb, lb);
@@ -48,12 +49,20 @@ static ICACHE_FLASH_ATTR void stop_ticking()
 	uart0_lock = 0;
 }
 
+static void ICACHE_FLASH_ATTR stopReset(void *arg)
+{
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+	os_printf("Reset off\n");
+}
+
 void ICACHE_FLASH_ATTR reset_arduino()
 {
+	static ETSTimer resetTimer;
 	// reset on gpio5
 	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
-	os_delay_us(3000000);
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+	os_printf("Reset on\n");
+	os_timer_setfn(&resetTimer, stopReset, NULL);
+	os_timer_arm(&resetTimer, 500, 0);
 }
 
 #define PAGE_SIZE (8*16)
@@ -75,6 +84,8 @@ static ICACHE_FLASH_ATTR int read_cur_byte()
 	char *line, *p, snum[5];
 	int rs = -1, crc, val, i, n;
 	if( cline.idx >= cline.n ) {
+		stk_percent =  100 * (ff_tell() - fpos_start) / fsize;
+//		os_printf("tell=%d, off=%d, fsize=%d, percent=%d\n", ff_tell(), fpos_start, fsize, stk_percent);
 		if(ff_tell() - fpos_start < fsize) {
 			// read next line;
 			p = line = ff_mread_str();
@@ -104,7 +115,7 @@ static ICACHE_FLASH_ATTR int read_cur_byte()
 						cline.addr = (int)strtol(snum, NULL, 16);
 						crc += cline.addr & 0xff;
 						crc += (cline.addr >> 8) & 0xff;
-						os_printf("lineaddr=0x%4.4X\n", cline.addr);
+//						os_printf("lineaddr=0x%4.4X\n", cline.addr);
 						// skip 9 byte of : and address etc
 						p += 9;
 						for(i=0; i<n; i++) {
@@ -113,7 +124,7 @@ static ICACHE_FLASH_ATTR int read_cur_byte()
 							snum[2] = 0;
 							val = (int)strtol(snum, NULL, 16);
 							crc += val;
-							os_printf("b=%2X (%s), ftell=%d, fsize=%d\n", val, snum, ff_tell()-fpos_start, fsize);
+//							os_printf("b=%2X (%s), ftell=%d, fsize=%d\n", val, snum, ff_tell()-fpos_start, fsize);
 							cline.vals[i] = val;
 							p += 2;
 						}
@@ -156,7 +167,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 	static int sync_cnt;
 	static int address = -1;
 	char ok, insync, laddress, haddress;
-	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
+//	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
 		os_printf(stk_error_descr = "stk timeout...\n");
@@ -290,9 +301,9 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					haddress = address >> 8 & 0xff;
 					os_printf("set page addr: %4X\n", address);
 					uart0_tx_one_char(0x55); //STK_LOAD_ADDRESS
-					os_printf("send laddr: %2X\n", laddress);
+//					os_printf("send laddr: %2X\n", laddress);
 					uart0_tx_one_char(laddress);
-					os_printf("send haddr: %2X\n", haddress);
+//					os_printf("send haddr: %2X\n", haddress);
 					uart0_tx_one_char(haddress);
 					address += PAGE_SIZE >> 1;
 					uart0_tx_one_char(0x20); // SYNC_CRC_EOP
@@ -324,7 +335,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						stk_tick = 0;
 					} else {
 						stk_error = 1;
-						stop_ticking();
 					}
 				}
 				break;
@@ -389,12 +399,13 @@ void program(int size, int pos_start)
 	fsize = size;
 	stk_stage = 0;
 	stk_tick = 0;
+	stk_percent = 0;
 	stk_error = 0;
 	stk_error_descr = NULL;
 	stk_major = stk_minor = 0;
 	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
-	uart0_lock = STK500_LOCK;
 	reset_arduino();
+	uart0_lock = STK500_LOCK;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
 	os_timer_arm(&delayTimer, 100, 1);
 }

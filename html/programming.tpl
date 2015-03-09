@@ -12,7 +12,7 @@
 </head>
 <body>
 
-Programming status: %prog_status% (tick: %tick%)<br/>
+Programming status: %prog_status%<br/>
 %status_msg%<br/>
 Bootloader: %bl_version%<br/>
 Signature: %signature%<br/>

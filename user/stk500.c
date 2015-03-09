@@ -29,7 +29,7 @@ int stk_error = 0;
 const char *stk_error_descr = NULL;
 char stk_major, stk_minor, stk_signature[3];
 
-static int in_sync(char fb, char lb)
+static ICACHE_FLASH_ATTR int in_sync(char fb, char lb)
 {
 	int rs = fb == 0x14 && lb == 0x10;
 	if(rs) {
@@ -41,22 +41,121 @@ static int in_sync(char fb, char lb)
 	return rs;
 }
 
-static void stop_ticking()
+static ICACHE_FLASH_ATTR void stop_ticking()
 {
 	os_timer_disarm(&delayTimer);
 	fpos_start = fcur_pos = fsize = -1;
 	uart0_lock = 0;
 }
 
+void ICACHE_FLASH_ATTR reset_arduino()
+{
+	// reset on gpio5
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
+	os_delay_us(3000000);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+}
+
 #define PAGE_SIZE (8*16)
-#define VALS_COUNT (PAGE_SIZE + 8)
+#define VALS_COUNT PAGE_SIZE
+
+typedef struct _CUR_LINE {
+	int addr;
+	int type;
+	int n;
+	int vals[VALS_COUNT];
+	int idx;
+} CUR_LINE;
+
+static CUR_LINE cline = { .n=0, .idx=0 };
+
+// return -1 if error or end of vals
+static ICACHE_FLASH_ATTR int read_cur_byte()
+{
+	char *line, *p, snum[5];
+	int rs = -1, crc, val, i, n;
+	if( cline.idx >= cline.n ) {
+		if(ff_tell() - fpos_start < fsize) {
+			// read next line;
+			p = line = ff_mread_str();
+//			os_printf("Read line %s\n", line);
+			if(line && line[0]) {
+				crc = 0;
+//				os_printf("line='%s'\n", line);
+				snum[0] = p[7];
+				snum[1] = p[8];
+				snum[2] = 0;
+				cline.type = (int)strtol(snum, NULL, 16);
+				crc += cline.type;
+				if(cline.type == 0) { // record type - (0-data, 1-end)
+					snum[0] = p[1];
+					snum[1] = p[2];
+					snum[2] = 0;
+					n = (int)strtol(snum, NULL, 16);
+					crc += n;
+					if(n > VALS_COUNT) {
+						os_printf("Error. Hex line is too long (%d > %d).\n", n, VALS_COUNT);
+					} else {
+						snum[0] = p[3];
+						snum[1] = p[4];
+						snum[2] = p[5];
+						snum[3] = p[6];
+						snum[4] = 0;
+						cline.addr = (int)strtol(snum, NULL, 16);
+						crc += cline.addr & 0xff;
+						crc += (cline.addr >> 8) & 0xff;
+						os_printf("lineaddr=0x%4.4X\n", cline.addr);
+						// skip 9 byte of : and address etc
+						p += 9;
+						for(i=0; i<n; i++) {
+							snum[0] = p[0];
+							snum[1] = p[1];
+							snum[2] = 0;
+							val = (int)strtol(snum, NULL, 16);
+							crc += val;
+							os_printf("b=%2X (%s), ftell=%d, fsize=%d\n", val, snum, ff_tell()-fpos_start, fsize);
+							cline.vals[i] = val;
+							p += 2;
+						}
+						// check crc
+						snum[0] = p[0];
+						snum[1] = p[1];
+						snum[2] = 0;
+						val = (int)strtol(snum, NULL, 16);
+						crc = ((crc ^ 0xff) + 1) & 0xff;
+						if(crc != val) {
+							os_printf("CRC error: crc=%X vs val=%X\n", crc, val);
+						}
+						cline.n = n;
+						cline.idx = 0;
+					}
+				}
+				mfree(&line);
+			}
+		}
+	}
+	if( cline.idx < cline.n) {
+		rs = cline.vals[cline.idx];
+	}
+	return rs;
+}
+
+// return -1 if error or end of vals
+static ICACHE_FLASH_ATTR int read_next_byte()
+{
+	int rs = read_cur_byte();
+	if(rs >= 0) {
+		cline.idx++;
+	}
+	return rs;
+}
 
 static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 {
-	int i, j, vals[VALS_COUNT], size, fpos = -1, valsize, lineaddr, rtype ,crc, val, save_pos;
+	int i, j, fpos, b;
 	static int sync_cnt;
-	static int address = 0;
-	char ok, insync, laddress, haddress, snum[5], *line, *p;
+	static int address = -1;
+	char ok, insync, laddress, haddress;
 	os_printf("state=%d, tick %d\n", stk_stage, stk_tick);
 	stk_tick++;
 	if(stk_tick > TICK_MAX) {
@@ -134,6 +233,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						os_printf("bootloader version %d.%d\n", stk_major, stk_minor);
 						os_printf("entering prog mode\n");
 						ff_seek(fpos_start);
+						address = -1;
 						uart0_tx_one_char(0x50);
 						uart0_tx_one_char(0x20);
 						os_printf("receiving sync ack\n");
@@ -176,16 +276,16 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 				}
 				break;
 			case 6:
-				save_pos = ff_tell();
-				p = line = ff_mread_str();
-				ff_seek(save_pos);
-				if(line) {
-					snum[0] = p[3];
-					snum[1] = p[4];
-					snum[2] = p[5];
-					snum[3] = p[6];
-					snum[4] = 0;
-					address = strtol(snum, NULL, 16) >> 1;
+				if( address < 0) {
+					b = read_cur_byte();
+					if(b >= 0) {
+						address = cline.addr;
+					} else {
+						stk_error = 1;
+						stop_ticking();
+					}
+				}
+				if(!stk_error) {
 					laddress = address & 0xFF;
 					haddress = address >> 8 & 0xff;
 					os_printf("set page addr: %4X\n", address);
@@ -194,12 +294,10 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					uart0_tx_one_char(laddress);
 					os_printf("send haddr: %2X\n", haddress);
 					uart0_tx_one_char(haddress);
+					address += PAGE_SIZE >> 1;
 					uart0_tx_one_char(0x20); // SYNC_CRC_EOP
 					stk_stage = 7;
 					stk_tick = 0;
-					mfree(&line);
-				} else {
-					stk_error = 1;
 				}
 				break;
 			case 7:
@@ -207,86 +305,26 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 					insync = uart0_get_char();
 					ok = uart0_get_char();
 					if(in_sync(insync, ok)) {
-						memset(vals, 0, sizeof(vals));
-						size = 0;
-						rtype = 0;
-						os_printf("pos=%d, size=%d\n", ff_tell(), size);
-						for(j = 0; j < 8 && rtype!= 1 && ff_tell() - fpos_start < fsize && !stk_error; j++) {
-							// process single line
-							p = line = ff_mread_str();
-//							os_printf("Read line %s\n", line);
-							if(line && line[0]) {
-								crc = 0;
-//								os_printf("line='%s'\n", line);
-								snum[0] = p[1];
-								snum[1] = p[2];
-								snum[2] = 0;
-								valsize = (int)strtol(snum, NULL, 16);
-								crc += valsize;
-								snum[0] = p[3];
-								snum[1] = p[4];
-								snum[2] = p[5];
-								snum[3] = p[6];
-								snum[4] = 0;
-								lineaddr = (int)strtol(snum, NULL, 16);
-								crc += lineaddr & 0xff;
-								crc += (lineaddr >> 8) & 0xff;
-								os_printf("lineaddr=0x%4.4X\n", lineaddr);
-								snum[0] = p[7];
-								snum[1] = p[8];
-								snum[2] = 0;
-								rtype = (int)strtol(snum, NULL, 16);
-								crc += rtype;
-								if(rtype == 0) { // record type - (0-data, 1-end)
-									// skip 9 byte of : and address etc
-									p += 9;
-									for(i=0; i<valsize; i++) {
-										snum[0] = p[0];
-										snum[1] = p[1];
-										snum[2] = 0;
-										val = (int)strtol(snum, NULL, 16);
-										crc += val;
-										os_printf("j=%d, i=%d, size=%d, b=%2X (%s), ftell=%d, fsize=%d\n", j, i, size, val, snum, ff_tell()-fpos_start, fsize);
-										vals[size++] = val;
-										p += 2;
-									}
-									// check crc
-									snum[0] = p[0];
-									snum[1] = p[1];
-									snum[2] = 0;
-									val = (int)strtol(snum, NULL, 16);
-									crc = ((crc ^ 0xff) + 1) & 0xff;
-									if(crc != val) {
-										os_printf("CRC error: crc=%X vs val=%X\n", crc, val);
-										stk_error = 1;
-									}
-								}
-								mfree(&line);
-							} else {
-								break;
-							}
+						uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
+						uart0_tx_one_char(0); // page size
+						uart0_tx_one_char(PAGE_SIZE); // page size
+						uart0_tx_one_char(0x46); // flash memory, 'F'
+						for(i=0; i<PAGE_SIZE; i++) {
+							b = read_next_byte();
+							uart0_tx_one_char(b);
 						}
-						if(!stk_error) {
-							uart0_tx_one_char(0x64); // STK_PROGRAM_PAGE
-							uart0_tx_one_char(0); // page size
-							uart0_tx_one_char(size); // page size
-							uart0_tx_one_char(0x46); // flash memory, 'F'
-							os_printf("size=%d\n", size);
-							for(j=0; j<size; j++) {
-								uart0_tx_one_char(vals[j]);
-							}
-							uart0_tx_one_char(0x20); // SYNC_CRC_EOP
-							if(ff_tell() - fpos_start >= fsize || rtype == 1) {
-								// end of file - stop/go to the next stage
-								stk_stage = 9;
-							} else {
-								// wait for sync then next block
-								stk_stage = 8;
-							}
-							stk_tick = 0;
+						uart0_tx_one_char(0x20); // SYNC_CRC_EOP
+						if(b < 0) {
+							// end of file - stop/go to the next stage
+							stk_stage = 9;
+						} else {
+							// wait for sync then next block
+							stk_stage = 8;
 						}
+						stk_tick = 0;
 					} else {
 						stk_error = 1;
+						stop_ticking();
 					}
 				}
 				break;
@@ -326,6 +364,7 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 						stk_stage = 11;
 						os_printf("end\n");
 						stop_ticking();
+						reset_arduino();
 					} else {
 						stk_error = 1;
 					}
@@ -341,14 +380,6 @@ static void ICACHE_FLASH_ATTR runProgrammer(void *arg)
 		os_printf("Error occured\n");
 		stop_ticking();
 	}
-}
-
-void ICACHE_FLASH_ATTR reset_arduino()
-{
-	// reset on gpio5
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
-	os_delay_us(300000);
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
 }
 
 void program(int size, int pos_start)

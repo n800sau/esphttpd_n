@@ -27,9 +27,9 @@ static serverConnData ICACHE_FLASH_ATTR *serverFindConnData(void *arg) {
 
 
 static void ICACHE_FLASH_ATTR serverSentCb(void *arg) {
-//	os_printf("Sent CB\n");
 //	serverConnData *conn=serverFindConnData(arg);
 //	if (conn==NULL) return;
+//	os_printf("Data has been sent%d\n");
 }
 
 #define LOCKED_STR "LOCKED\r\n"

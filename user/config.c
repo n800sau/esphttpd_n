@@ -75,6 +75,28 @@ static void config_cmd_reset(struct espconn *conn, uint8_t argc, char *argv[]) {
 	system_restart();
 }
 
+static void config_cmd_baud(struct espconn *conn, uint8_t argc, char *argv[]) {
+	if (argc != 1) {
+		espconn_sent(conn, MSG_ERROR, strlen(MSG_ERROR));
+	} else {
+		uint32_t baud = atoi(argv[1]);
+		if ((baud > (UART_CLK_FREQ / 16)) || baud == 0) {
+			espconn_sent(conn, MSG_ERROR, strlen(MSG_ERROR));
+		} else {
+			// pump and dump fifo
+			while(TRUE) {
+				uint32_t fifo_cnt = READ_PERI_REG(UART_STATUS(0)) & (UART_TXFIFO_CNT<<UART_TXFIFO_CNT_S);
+				if ((fifo_cnt >> UART_TXFIFO_CNT_S & UART_TXFIFO_CNT) == 0) {
+					break;
+				}
+			}
+			os_printf("Set baud to %d\n", baud);
+			os_delay_us(1000);
+			uart_div_modify(0, UART_CLK_FREQ / baud);
+			espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+		}
+	}
+}
 static void config_cmd_mode(struct espconn *conn, uint8_t argc, char *argv[]) {
 	uint8_t mode;
 
@@ -194,7 +216,7 @@ static void config_debug_mode(struct espconn *conn, uint8_t argc, char *argv[]) 
 	}
 }
 
-static int do_ifconfig(struct espconn *conn, int argc, const char* argv[])
+static void do_ifconfig(struct espconn *conn, uint8_t argc, char* argv[])
 {
 	struct ip_info sta_info, ap_info;
 	int mode = wifi_get_opmode();
@@ -218,10 +240,9 @@ static int do_ifconfig(struct espconn *conn, int argc, const char* argv[])
 	mconcat(&buf, MSG_OK);
 	espconn_sent(conn, buf, strlen(buf));
 	os_free(buf);
-	return 0;
 }
 
-static int do_help(struct espconn *conn, int argc, const char* argv[])
+static void do_help(struct espconn *conn, uint8_t argc, char* argv[])
 {
 	const config_commands_t *p = config_commands;
 	char *buf = NULL;
@@ -234,11 +255,11 @@ static int do_help(struct espconn *conn, int argc, const char* argv[])
 	buf = mconcat(&buf, MSG_OK);
 	espconn_sent(conn, buf, strlen(buf));
 	mfree(&buf);
-	return 0;
 }
 
 const config_commands_t config_commands[] = { 
 		{ "HELP", &do_help },
+		{ "BAUD", &config_cmd_baud },
 		{ "IFCONFIG", &do_ifconfig },
 		{ "RESET", &config_cmd_reset }, 
 		{ "MODE", &config_cmd_mode },

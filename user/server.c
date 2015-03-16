@@ -107,12 +107,12 @@ static void ICACHE_FLASH_ATTR read_uart(void *arg)
 		n = uart0_count_chars();
 		if(n > 0) {
 			buf = os_malloc(n+1);
+			for(j=0; j<n; j++) {
+				buf[j] = uart0_get_char();
+//				os_printf("[%2X] ", buf[j]);
+			}
 			for (i = 0; i < MAX_CONN; ++i) {
 				if (connData[i].conn) {
-					for(j=0; j<n; j++) {
-						buf[j] = uart0_get_char();
-//						os_printf("[%2X] ", buf[j]);
-					}
 					espconn_sent(connData[i].conn, (uint8_t*)buf, n);
 //					os_printf("\nSent %d bytes\n", n);
 				}
@@ -127,11 +127,11 @@ static void ICACHE_FLASH_ATTR read_uart(void *arg)
 		n = uart1_count_chars();
 		if(n > 0) {
 			buf = os_malloc(n+1);
+			for(j=0; j<n; j++) {
+				buf[j] = uart1_get_char();
+			}
 			for (i = 0; i < MAX_CONN; ++i) {
 				if (connData[i].conn) {
-					for(j=0; j<n; j++) {
-						buf[j] = uart1_get_char();
-					}
 					espconn_sent(connData[i].conn, (uint8_t*)buf, n);
 				}
 			}

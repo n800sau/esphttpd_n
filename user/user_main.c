@@ -87,7 +87,7 @@ void user_init(void) {
 
 	gpio_init();
 
-	uart_init(BIT_RATE_57600, BIT_RATE_115200);
+	uart_init(BIT_RATE_115200, BIT_RATE_115200);
 
 	// install uart1 putc callback
 	os_install_putc1((void *)uart1_write_char);

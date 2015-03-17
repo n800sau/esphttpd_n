@@ -413,7 +413,7 @@ void program(int size, int pos_start)
 	reset_arduino();
 	uart0_lock = STK500_LOCK;
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
-	os_timer_arm(&delayTimer, 200, 1);
+	os_timer_arm(&delayTimer, 100, 1);
 }
 
 void ICACHE_FLASH_ATTR init_reset_pin()

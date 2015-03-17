@@ -20,8 +20,8 @@ Please choose serial port baud rate:
 <select name="baud">
 <option value="19200">19200 (Pro 168, Mini 168)</option>
 <option value="38400">38400</option>
-<option value="57600" selected="selected">57600 (Pro 328)</option>
-<option value="115200">115200 (Mini 328)</option>
+<option value="57600">57600 (Pro 328)</option>
+<option value="115200" selected="selected">115200 (UNO, Mini 328)</option>
 </select>
 <p>
 Please choose a file:<br>

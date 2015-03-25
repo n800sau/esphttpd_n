@@ -13,7 +13,7 @@ RESET - reset
 MODE - wifi mode
 STA - station info
 AP - access point info
-IORST - set gpio5 to 0 for some time then set back to 1
+IORST - set a gpio that is used to reset arduino to 0 for some time then set back to 1
 DEBUG <0|1> - send to telnet debug serial output
 
 max  36864?

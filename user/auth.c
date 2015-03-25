@@ -10,6 +10,7 @@ HTTP auth implementation. Only does basic authentication for now.
  * and you think this stuff is worth it, you can buy me a beer in return. 
  * ----------------------------------------------------------------------------
  */
+#ifdef AUTH_PASSWORD
 
 
 #include <string.h>
@@ -66,4 +67,4 @@ int ICACHE_FLASH_ATTR authBasic(HttpdConnData *connData) {
 	//Okay, all done.
 	return HTTPD_CGI_DONE;
 }
-
+#endif // AUTH_PASSWORD

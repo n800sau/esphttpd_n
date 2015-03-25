@@ -26,13 +26,16 @@
 #include "server.h"
 #include <gpio.h>
 
+// AUTH_PASSWORD is used for turning on authorisation
+
+#ifdef AUTH_PASSWORD
 //Function that tells the authentication system what users/passwords live on the system.
 //This is disabled in the default build; if you want to try it, enable the authBasic line in
 //the builtInUrls below.
 int myPassFn(HttpdConnData *connData, int no, char *user, int userLen, char *pass, int passLen) {
 	if (no==0) {
 		os_strcpy(user, "admin");
-		os_strcpy(pass, "s3cr3t");
+		os_strcpy(pass, AUTH_PASSWORD);
 		return 1;
 //Add more users this way. Check against incrementing no for each user added.
 //	} else if (no==1) {
@@ -42,7 +45,7 @@ int myPassFn(HttpdConnData *connData, int no, char *user, int userLen, char *pas
 	}
 	return 0;
 }
-
+#endif
 
 /*
 This is the main url->function dispatching data struct.
@@ -65,8 +68,10 @@ HttpdBuiltInUrl builtInUrls[]={
 
 	//Routines to make the /wifi URL and everything beneath it work.
 
-//Enable the line below to protect the WiFi configuration with an username/password combo.
-//	{"/wifi/*", authBasic, myPassFn},
+//Enable the line below to protect an username/password combo.
+#ifdef AUTH_PASSWORD
+	{"*", authBasic, myPassFn},
+#endif
 
 	{"/wifi", cgiRedirect, "/wifi/wifi.tpl"},
 	{"/wifi/", cgiRedirect, "/wifi/wifi.tpl"},

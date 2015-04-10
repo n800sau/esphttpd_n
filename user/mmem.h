@@ -8,7 +8,7 @@ char *mconcat(char **bufptr, char *addbuf);
 char *madd_ip(char **bufptr, uint32_t ip);
 void mfree(char **bufptr);
 
-#define FF_SIZE 0x11000
+#define FF_SIZE 0x19000 //26FFF start
 
 void ff_reset();
 void ff_seek(int pos);

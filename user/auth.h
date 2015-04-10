@@ -13,10 +13,14 @@
 #define AUTH_MAX_USER_LEN 32
 #define AUTH_MAX_PASS_LEN 32
 
+#ifdef AUTH_PASSWORD
+
 //Parameter given to authWhatever functions. This callback returns the usernames/passwords the device
 //has.
 typedef int (* AuthGetUserPw)(HttpdConnData *connData, int no, char *user, int userLen, char *pass, int passLen);
 
 int ICACHE_FLASH_ATTR authBasic(HttpdConnData *connData);
+
+#endif
 
 #endif

@@ -26,6 +26,9 @@ if s is None:
 	print 'could not open socket'
 	sys.exit(1)
 
+s.setblocking(1)
+s.settimeout(1)
+
 def read_byte():
 	while True:
 		b = bytearray(1)
@@ -41,25 +44,9 @@ def read_dat(nlines, datawidth):
 	for i in range(nlines):
 		_read_until('DAT: ')
 		l = _read_size(datawidth)
-		print len(l), i
+#		print len(l), i
 		rs += l
 	return rs
-
-def read2file(f, nlines, timeout=1):
-	b = bytearray(1024)
-	while True:
-		readable, writable, exceptional = select.select([s], [], [s], timeout)
-		print readable
-		if readable:
-			while True:
-				n = s.recv_into(b)
-				if n == 0:
-					break
-				else:
-					f.write(b[:n])
-					f.flush()
-		else:
-			break
 
 def _read_until(s='\r'):
 	rs = ''
@@ -93,35 +80,31 @@ def send(request, c='\r'):
 	return read_until(c)
 
 def send_at(cmd):
-	rs = str(send('+++AT' + cmd + '\r'))
-	return rs.strip()
+	rs = str(send('+++AT' + cmd + '\r')).strip()
+	if rs.endswith('ERROR'):
+		raise Exception('Error:' + '\n'.join(rs))
+	return rs
 
 def send_cmu(cmd=''):
-	return send(cmd + '\r', ':').rstrip(':')
+	rs = str(send(cmd + '\r')).strip()
+	if cmd:
+		if not rs.endswith('ACK'):
+			raise Exception('Error:' + '\n'.join(rs))
+	return rs
 
-def send_cmu_bin(cmd):
-	return send(cmd + '\r')
+def send_cmu_end():
+	send('\r')
 
-err = True
-
-if send_at('USEC').startswith('OK'):
-	if send_at('BAUD 19200').startswith('OK'):
-		err = False
-		print send_cmu('GV').strip().split('\n')
-		for i in range(10):
-			send_at('LFLASH')
-			data = send_cmu_bin('SF 3 3')
-#			print data
-#		print send_cmu("DF 0 0")
-			f = file('data_%2.2d.bin' % i,'w')
-			f.write(read_dat(80, 60*2))
-			send_cmu()
-#		print send_cmu("LS")
-#		print 'start'
-#		read2file(f, 80)
-#		print 'end'
-
-if err:
-	print 'Error'
+send_at('USEC')
+send_at('BAUD 19200')
+send_cmu('GV')
+print read_until('\r')
+#		for i in range(10):
+send_at('LFLASH')
+send_cmu('SF 3 3')
+f = file('data.bin','w')
+f.write(read_dat(80, 60*2))
+send_cmu()
+print 'End'
 
 s.close()

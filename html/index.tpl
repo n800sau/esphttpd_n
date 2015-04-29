@@ -7,6 +7,9 @@
 <body>
 <div id="main">
 ESP8266 esphttpd_n site. This page has been loaded <b>%counter%</b> times.
+<p>
+<a href="/cam.html">See the Picture</a>
+</p>
 <ul>
 <li>If you haven't connected this device to your WLAN network now, you can <a href="/wifi">do so.</a></li>
 <li>You can also control the <a href="led.tpl">LED</a>.</li>

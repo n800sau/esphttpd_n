@@ -14,6 +14,7 @@
 #include "osapi.h"
 #include "driver/uart.h"
 #include "user_interface.h"
+#include "eagle_soc_ext.h"
 
 #define UART0	0
 #define UART1	1
@@ -23,14 +24,16 @@ extern UartDevice UartDev;
 
 LOCAL void uart0_rx_intr_handler(void *para);
 
-#define recvCharTaskPrio        0
-#define recvCharTaskQueueLen    64
+#define recvCharTaskPrio		0
+#define recvCharTaskQueueLen	64
 
 #define UART0_BUF_SIZE 512
 static char uart0_buf[UART0_BUF_SIZE];
 static int uart0_buf_pos = 0;
 
 int uart0_lock = 0;
+
+static int _uart0_primary = 1;
 
 void ICACHE_FLASH_ATTR uart0_add_char(char c)
 {
@@ -53,6 +56,11 @@ char ICACHE_FLASH_ATTR uart0_get_char()
 	}
 //	os_printf("get char : %2X\n", rs);
 	return rs;
+}
+
+char ICACHE_FLASH_ATTR uart0_peek_char()
+{
+	return (uart0_buf_pos > 0) ? uart0_buf[0]: -1;
 }
 
 int ICACHE_FLASH_ATTR uart0_count_chars()
@@ -139,14 +147,14 @@ LOCAL void ICACHE_FLASH_ATTR uart_config(uint8 uart_no)
 		PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO2_U, FUNC_U1TXD_BK);
 	} else {
 		/* rcv_buff size if 0x100 */
-		ETS_UART_INTR_ATTACH(uart0_rx_intr_handler,	 &(UartDev.rcv_buff));
+		ETS_UART_INTR_ATTACH(uart0_rx_intr_handler, &(UartDev.rcv_buff));
 		PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);
 		PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD);
 	}
 
 	uart_div_modify(uart_no, UART_CLK_FREQ / (UartDev.baut_rate));
 
-	WRITE_PERI_REG(UART_CONF0(uart_no),	   UartDev.exist_parity
+	WRITE_PERI_REG(UART_CONF0(uart_no), UartDev.exist_parity
 				   | UartDev.parity
 				   | (UartDev.stop_bits << UART_STOP_BIT_NUM_S)
 				   | (UartDev.data_bits << UART_BIT_NUM_S));
@@ -283,6 +291,43 @@ void ICACHE_FLASH_ATTR uart0_change_rate(UartBautRate uart0_br)
 	ETS_UART_INTR_ENABLE();
 }
 
+void ICACHE_FLASH_ATTR uart0_primary()
+{
+	PIN_PULLUP_DIS(PERIPHS_IO_MUX_U0TXD_U);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD);
+
+	PIN_PULLUP_EN(PERIPHS_IO_MUX_U0RXD_U);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD);
+
+	CLEAR_PERI_REG_MASK(0x3ff00028, BIT2);
+
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTCK_U, FUNC_GPIO13);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);
+
+	_uart0_primary = 1;
+}
+
+void ICACHE_FLASH_ATTR uart0_secondary()
+{
+	PIN_PULLUP_DIS(PERIPHS_IO_MUX_MTCK_U);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTCK_U, FUNC_UART0_CTS);
+
+	PIN_PULLUP_EN(PERIPHS_IO_MUX_MTDO_U);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_UART0_RTS);
+
+	//SWAP PIN : U0TXD<==>U0RTS(MTDO, GPIO15) , U0RXD<==>U0CTS(MTCK, GPIO13)
+	SET_PERI_REG_MASK(0x3ff00028, BIT2);
+
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_GPIO3);
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_GPIO1);
+
+	_uart0_primary = 0;
+}
+
+int ICACHE_FLASH_ATTR is_uart0_primary()
+{
+	return _uart0_primary;
+}
 
 
 /******************************************************************************

@@ -15,6 +15,8 @@
 #define SYNC_STEP (SYNC_PAUSE / TICK_TIME)
 #define STK500_LOCK 1677
 
+#define SWAP_UART0
+
 // gpio 4, 5, 12, 13, 14, 15
 
 
@@ -23,6 +25,7 @@ static int fsize = -1;
 static int fpos_start = -1;
 static int fcur_pos = -1;
 
+int is_prim = 1;
 int stk_tick = 0;
 int stk_stage = 0;
 int stk_percent = 0;
@@ -46,21 +49,30 @@ static ICACHE_FLASH_ATTR void stop_ticking()
 {
 	os_timer_disarm(&delayTimer);
 	fpos_start = fcur_pos = fsize = -1;
+#ifdef SWAP_UART0
+	if(is_prim) {
+		uart0_primary();
+	}
+#else
+	if(!is_prim) {
+		uart0_secondary();
+	}
+#endif
 	uart0_lock = 0;
 }
 
 static void ICACHE_FLASH_ATTR stopReset(void *arg)
 {
 //	gpio_output_set(BIT12, 0, BIT12, 0);
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(4), 1);
 	os_printf("Reset off\n");
 }
 
 void reset_arduino()
 {
 	static ETSTimer resetTimer;
-	// reset on gpio5
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0);
+	// reset on gpio4
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(4), 0);
 
 //	gpio_output_set(0, BIT12, BIT12, 0);
 	os_printf("Reset on\n");
@@ -412,24 +424,30 @@ void program(int size, int pos_start)
 	stk_signature[0] = stk_signature[1] = stk_signature[2] = 0;
 	reset_arduino();
 	uart0_lock = STK500_LOCK;
+	is_prim = is_uart0_primary();
+#ifdef SWAP_UART0
+	uart0_secondary();
+#else
+	uart0_primary();
+#endif
 	os_timer_setfn(&delayTimer, runProgrammer, NULL);
 	os_timer_arm(&delayTimer, 100, 1);
 }
 
 void ICACHE_FLASH_ATTR init_reset_pin()
 {
-	//set gpio5 as gpio pin
-	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12);
+	//set gpio4 as gpio pin
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4);
 
 	//disable pulldown
-	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_MTDI_U);
+	PIN_PULLDWN_DIS(PERIPHS_IO_MUX_GPIO4_U);
 
 	//enable pull up R
-	PIN_PULLUP_DIS(PERIPHS_IO_MUX_MTDI_U);
+	PIN_PULLUP_DIS(PERIPHS_IO_MUX_GPIO4_U);
 
 	//1
 //	gpio_output_set(BIT12, 0, BIT12, 0);
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(4), 1);
 }
 
 void init_stk500()

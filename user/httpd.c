@@ -22,7 +22,6 @@ Esp8266 http server - core routines
 
 #include "espconn.h"
 #include "httpd.h"
-#include "io.h"
 #include "espfs.h"
 
 
@@ -354,6 +353,7 @@ static void ICACHE_FLASH_ATTR httpdSendResp(HttpdConnData *conn) {
 		if (match) {
 			os_printf("Url index %d\n", i);
 			conn->cgiData=NULL;
+			conn->pos = 0;
 			conn->cgi=builtInUrls[i].cgiCb;
 			conn->cgiArg=builtInUrls[i].cgiArg;
 			r=conn->cgi(conn);

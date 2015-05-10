@@ -115,15 +115,15 @@ def parseData(data):
 		elif typ == 'H':
 			rs = [int(v)*100/255 for v in data.strip().split(' ')]
 		elif typ == 'S':
-			rs = [float(v) for v in data.strip().split(' ')]
+			rs = dict(zip(('rmean', 'gmean', 'bmean', 'rmedian','gmedian','bmedian', 'rmode', 'gmode', 'bmode', 'rstdev', 'gstdev', 'bstdev', ), [float(v) for v in data.strip().split(' ')]))
 		elif typ == 'T':
-			rs = dict(zip(['mx', 'my', 'x1', 'y1', 'x2', 'y2', 'pixels', 'confidence'], [float(v) for v in data.strip().split(' ')]))
+			rs = dict(zip(('mx', 'my', 'x1', 'y1', 'x2', 'y2', 'pixels', 'confidence'), [float(v) for v in data.strip().split(' ')]))
 	if rs is None:
 		raise Exception('Not parseable data (size: %d, type:%s, space:0x%2.2X): %s ...' % (len(data), data[:1], ord(data[1]) if isinstance(data[1], basestring) else data[1], data[:10]))
 	return rs
 
 def file_data_bin():
-#	send_at('LFLASH')
+	send_at('LFLASH')
 	send_cmu('SF 3 3')
 	f = file('data.bin','w')
 	f.write(read_dat(80, 60*2))
@@ -184,49 +184,102 @@ def file_twdata():
 
 def file_tcdata():
 	send_cmu('TC 96 100 0 255 0 255')
+#	send_cmu('TC')
 	f = file('tcdata.json','w')
+	json.dump(parseData(read_until()), f)
+
+def file_mean():
+	send_cmu('GM')
+	f = file('mean.json','w')
 	json.dump(parseData(read_until()), f)
 
 
 def run():
 	send_at('USEC')
-#	send_at('BAUD 19200')
-	send_at('BAUD 38400')
+	send_at('BAUD 19200')
+#	send_at('BAUD 38400')
 #	send_at('BAUD 115200')
 	send_cmu_stop()
+
 #	send_cmu('BM 38400')
 #	send_cmu('BM 115200')
 #	send_at('BAUD 38400')
+
+	send_cmu('SS 1 1 800')
+	send_cmu('SS 0 1 1600')
+	time.sleep(1)
+
+	# set auto gain on
+	send_cmu('AG 1')
+	# set auto white balance on
+	send_cmu('AW 1')
+	# set led to blink
+	send_cmu('L1 5')
+	# wait a little
+	time.sleep(5)
+	# set auto gain off
+	send_cmu('AG 0')
+	# set auto white balance off
+	send_cmu('AW 0')
+	# set led off without disabling
+	send_cmu('L1 -1')
+
+
 #	show_gv()
-#	send_cmu_stop()
+	send_cmu_stop()
+
+#	send_cmu('SS 0 0')
+#	send_cmu('SS 1 0')
+#	time.sleep(1)
+
 	# switch to poll mode
 	send_cmu('PM 1')
 	# turn off line mode
 	send_cmu('LM 0')
-
-#	file_gh_html()
-	# switch to color track mode (opposite to yuv)
-	send_cmu('CT 1')
-	send_cmu('HT 0')
-
-# reset colors
-#	send_cmu('ST')
-
-	send_cmu('ST 64 95 0 0 0 0')
+	# noise filter
+	send_cmu("NF 5")
 
 	send_cmu_stop()
 
-	file_tcdata()
+	file_gh_html()
 
-#	file_twdata()
+	# switch to color track mode (opposite to yuv)
+	send_cmu('CT 0')
 
 	file_data_bin()
 
 	send_cmu_stop()
 
+#	send_cmu('CT 1')
+
+	send_cmu('HT 1')
+
+	# set tracking window
+#	send_cmu('SW 20 60 100 100')
+	send_cmu('SW 0 0 120 160')
+
+	send_cmu_stop()
+
+# reset colors
+#	send_cmu('ST')
+
+	send_cmu('ST 24 39 40 55 56 71')
+
+	# get tracking data
+	file_tcdata()
+
+	file_twdata()
+
+	file_mean()
+
 	file_bwdata_bin()
 
 	send_cmu_stop()
+
+	# put to deep sleep
+	send_cmu('SD')
+
+	send_at('UPRI')
 
 	print 'End'
 

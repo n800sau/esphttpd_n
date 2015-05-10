@@ -25,6 +25,7 @@ struct HttpdConnData {
 	char *getArgs;
 	const void *cgiArg;
 	void *cgiData;
+	int pos;
 	HttpdPriv *priv;
 	cgiSendCallback cgi;
 	char boundary[80];

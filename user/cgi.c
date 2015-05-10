@@ -20,12 +20,13 @@ flash as a binary. Also handles the hit counter on the main page.
 #include <mem.h>
 #include "httpd.h"
 #include "cgi.h"
-#include "io.h"
+#include "config.h"
 #include "base64.h"
 #include <ip_addr.h>
 #include "espmissingincludes.h"
 #include "mmem.h"
 #include <ets_sys.h>
+#include "cmucam4.h"
 
 //cause I can't be bothered to write an ioGetLed()
 static char currLedState=0;
@@ -46,7 +47,7 @@ int ICACHE_FLASH_ATTR cgiLed(HttpdConnData *connData) {
 	mfree(&line);
 	if (len!=0) {
 		currLedState=atoi(buff);
-		ioLed(currLedState);
+		if(currLedState) _ledon(); else _ledoff();
 	}
 
 	httpdRedirect(connData, "led.tpl");
@@ -88,7 +89,7 @@ void ICACHE_FLASH_ATTR tplCounter(HttpdConnData *connData, char *token, void **a
 
 //Cgi that reads the SPI flash. Assumes 512KByte flash.
 int ICACHE_FLASH_ATTR cgiReadFlash(HttpdConnData *connData) {
-	int *pos=(int *)&connData->cgiData;
+	int *pos=&connData->pos;
 	if (connData->conn==NULL) {
 		//Connection aborted. Clean up.
 		return HTTPD_CGI_DONE;
@@ -203,5 +204,108 @@ void tplProgramming(HttpdConnData *connData, char *token, void **arg)
 		os_sprintf(buff, "%d.%d.%d", stk_signature[0], stk_signature[1], stk_signature[2]);
 	}
 	httpdSend(connData, buff, -1);
+}
+
+// Switch serial to the secondary pins
+// Read and return colour bmp from CMUcam4
+int ICACHE_FLASH_ATTR cgiCmuCam4color(HttpdConnData *connData) {
+	int *pos=&connData->pos;
+	if (connData->conn==NULL) {
+		//Connection aborted. Clean up.
+		return HTTPD_CGI_DONE;
+	}
+
+	if (*pos==0) {
+		os_printf("Start color bmp download.\n");
+		char buf[9600];
+		int n = cmucam4_color(buf, sizeof(buf));
+		return HTTPD_CGI_MORE;
+	}
+}
+
+// Switch serial to the secondary pins
+// Read and return mask bmp from CMUcam4
+int ICACHE_FLASH_ATTR cgiCmuCam4bw(HttpdConnData *connData) {
+	int *pos=&connData->pos;
+	if (connData->conn==NULL) {
+		//Connection aborted. Clean up.
+		return HTTPD_CGI_DONE;
+	}
+
+	if (*pos==0) {
+		os_printf("Start mask bmp download.\n");
+		char buf[600];
+		int n=cmucam4_bw(buf, sizeof(buf));
+		if(n < 0) {
+			return HTTPD_CGI_ERROR;
+		} else if(n == 0) {
+			httpdStartResponse(connData, 200);
+			httpdHeader(connData, "Content-Type", "application/octet-stream");
+			httpdEndHeaders(connData);
+			return HTTPD_CGI_MORE;
+		} else {
+			espconn_sent(connData->conn, buf, n);
+			return HTTPD_CGI_DONE;
+		}
+	}
+}
+
+// Switch serial to the secondary pins
+// Read and return tc json from CMUcam4
+int ICACHE_FLASH_ATTR cgiCmuCam4tc(HttpdConnData *connData) {
+	int *pos=&connData->pos;
+	if (connData->conn==NULL) {
+		//Connection aborted. Clean up.
+		return HTTPD_CGI_DONE;
+	}
+
+	if (*pos==0) {
+		os_printf("Start TC json download.\n");
+		char buf[600];
+		int n=cmucam4_tc(buf, sizeof(buf));
+		if(n < 0) {
+			return HTTPD_CGI_ERROR;
+		} else if(n == 0) {
+			httpdStartResponse(connData, 200);
+			httpdHeader(connData, "Content-Type", "application/json");
+			httpdEndHeaders(connData);
+			return HTTPD_CGI_MORE;
+		} else {
+			espconn_sent(connData->conn, buf, n);
+			return HTTPD_CGI_DONE;
+		}
+	}
+}
+
+// Switch serial to the secondary pins
+// Read and return tw json from CMUcam4
+int ICACHE_FLASH_ATTR cgiCmuCam4tw(HttpdConnData *connData) {
+	char buf[200];
+	int *pos=&connData->pos;
+	if (connData->conn==NULL) {
+		//Connection aborted. Clean up.
+		return HTTPD_CGI_DONE;
+	}
+
+	if (*pos==0) {
+		os_printf("Start TW json download.\n");
+		httpdStartResponse(connData, 200);
+		httpdHeader(connData, "Content-Type", "application/json");
+		httpdEndHeaders(connData);
+		if(cmucam4_send("TW") < 0) {
+			return HTTPD_CGI_ERROR;
+		} else {
+			return HTTPD_CGI_MORE;
+		}
+	} else {
+		int n=cmucam4_tw(buf, sizeof(buf));
+		if(n < 0) {
+			return HTTPD_CGI_ERROR;
+		} else if(n == 0) {
+		} else {
+			espconn_sent(connData->conn, buf, n);
+			return HTTPD_CGI_DONE;
+		}
+	}
 }
 

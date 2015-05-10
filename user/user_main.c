@@ -16,7 +16,6 @@
 #include "ets_sys.h"
 #include "osapi.h"
 #include "httpd.h"
-#include "io.h"
 #include "httpdespfs.h"
 #include "cgi.h"
 #include "cgiwifi.h"
@@ -24,6 +23,7 @@
 #include "driver/uart.h"
 #include "stk500.h"
 #include "server.h"
+#include "config.h"
 #include <gpio.h>
 
 // AUTH_PASSWORD is used for turning on authorisation
@@ -60,6 +60,10 @@ should be placed above the URLs they protect.
 HttpdBuiltInUrl builtInUrls[]={
 	{"/", cgiRedirect, "/index.tpl"},
 	{"/flash.bin", cgiReadFlash, NULL},
+	{"/cam/data.bin", cgiCmuCam4color, NULL},
+	{"/cam/bwdata.bin", cgiCmuCam4bw, NULL},
+	{"/cam/twdata.json", cgiCmuCam4tw, NULL},
+	{"/cam/tcdata.json", cgiCmuCam4tc, NULL},
 	{"/led.tpl", cgiEspFsTemplate, tplLed},
 	{"/index.tpl", cgiEspFsTemplate, tplCounter},
 	{"/led.cgi", cgiLed, NULL},
@@ -92,15 +96,16 @@ void user_init(void) {
 
 	gpio_init();
 
+	_ledoff();
+
 	uart_init(BIT_RATE_115200, BIT_RATE_115200);
 
 	// install uart1 putc callback
 	os_install_putc1((void *)uart1_write_char);
 
 	os_printf("\n\n\n\n\n\n\n\n");
-    os_printf("SDK version:%s\n", system_get_sdk_version());
+	os_printf("SDK version:%s\n", system_get_sdk_version());
 
-//	ioInit();
 	httpdInit(builtInUrls, 80);
 	serverInit(23);
 

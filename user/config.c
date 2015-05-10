@@ -199,6 +199,40 @@ static void io_reset(struct espconn *conn, uint8_t argc, char *argv[]) {
 	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
 }
 
+void _ledon()
+{
+	os_printf("Led on\n");
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 1);
+}
+
+void _ledoff()
+{
+	os_printf("Led off\n");
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
+	GPIO_OUTPUT_SET(GPIO_ID_PIN(5), 0);
+}
+
+// led on via gpio5
+static void io_ledon(struct espconn *conn, uint8_t argc, char *argv[]) {
+	_ledon();
+	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+}
+
+// led off via gpio5
+static void io_ledoff(struct espconn *conn, uint8_t argc, char *argv[]) {
+	_ledoff();
+	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+}
+
+// led flash via gpio5
+static void io_ledflash(struct espconn *conn, uint8_t argc, char *argv[]) {
+	static ETSTimer resetTimer;
+	_ledon();
+	os_timer_setfn(&resetTimer, _ledoff, NULL);
+	os_timer_arm(&resetTimer, 500, 0);
+	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+}
+
 static void config_debug_mode(struct espconn *conn, uint8_t argc, char *argv[]) {
 	uint8_t mode;
 
@@ -249,7 +283,7 @@ static void do_help(struct espconn *conn, uint8_t argc, char* argv[])
 	while(p->command) {
 		buf = mconcat(&buf, p->command);
 		buf = mconcat(&buf, NL);
-		os_printf("print %s\n", p->command);
+//		os_printf("print %s\n", p->command);
 		p++;
 	}
 	buf = mconcat(&buf, MSG_OK);
@@ -257,15 +291,48 @@ static void do_help(struct espconn *conn, uint8_t argc, char* argv[])
 	mfree(&buf);
 }
 
+static void config_upri(struct espconn *conn, uint8_t argc, char *argv[]) {
+	uart0_primary();
+	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+}
+
+static void config_usec(struct espconn *conn, uint8_t argc, char *argv[]) {
+	uart0_secondary();
+	espconn_sent(conn, MSG_OK, strlen(MSG_OK));
+}
+
+static void io_volts(struct espconn *conn, uint8_t argc, char *argv[]) {
+	char *buf = os_malloc(MSG_BUF_LEN);
+	os_sprintf(buf, "%d\n", (uint16)phy_get_vdd33());
+	mconcat(&buf, MSG_OK);
+	espconn_sent(conn, buf, strlen(buf));
+	os_free(buf);
+}
+
+static void show_version(struct espconn *conn, uint8_t argc, char *argv[]) {
+	char *buf = os_malloc(MSG_BUF_LEN);
+	os_sprintf(buf, "%d\n", system_get_boot_version());
+	mconcat(&buf, MSG_OK);
+	espconn_sent(conn, buf, strlen(buf));
+	os_free(buf);
+}
+
 const config_commands_t config_commands[] = { 
 		{ "HELP", &do_help },
+		{ "VER", &show_version },
 		{ "BAUD", &config_cmd_baud },
+		{ "USEC", &config_usec },
+		{ "UPRI", &config_upri },
 		{ "IFCONFIG", &do_ifconfig },
 		{ "RESET", &config_cmd_reset }, 
 		{ "MODE", &config_cmd_mode },
 		{ "STA", &config_cmd_sta },
 		{ "AP", &config_cmd_ap },
 		{ "IORST", &io_reset },
+		{ "LON", &io_ledon },
+		{ "LOFF", &io_ledoff },
+		{ "LFLASH", &io_ledflash },
+		{ "VOLTS", &io_volts },
 		{ "DEBUG", &config_debug_mode },
 		{ NULL, NULL }
 	};

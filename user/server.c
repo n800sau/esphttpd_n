@@ -152,6 +152,6 @@ void ICACHE_FLASH_ATTR serverInit(int port) {
 
 	os_timer_disarm(&delayTimer);
 	os_timer_setfn(&delayTimer, read_uart, NULL);
-	os_timer_arm(&delayTimer, 100, 1);
+	os_timer_arm(&delayTimer, 10, 1);
 
 }

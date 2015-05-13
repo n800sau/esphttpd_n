@@ -16,6 +16,8 @@
 #define STK500_LOCK 1677
 
 #define SWAP_UART0
+// swaped rx - 13  tx - 15
+
 
 // gpio 4, 5, 12, 13, 14, 15
 
